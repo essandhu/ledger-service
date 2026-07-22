@@ -40,6 +40,7 @@ dependencies {
     runtimeOnly(libs.postgresql.jdbc)
 
     testImplementation("org.springframework.boot:spring-boot-starter-test")
+    testImplementation("org.springframework.boot:spring-boot-starter-webmvc-test")
     testImplementation("org.springframework.boot:spring-boot-testcontainers")
     testImplementation("org.testcontainers:testcontainers-postgresql")
     testImplementation("org.springframework.security:spring-security-test")
@@ -49,9 +50,6 @@ dependencies {
 
 tasks.test {
     useJUnitPlatform()
-    // No tests exist until M0 lands its first failing test; Gradle 9 fails empty test tasks by default.
-    // TODO(M0): remove once the first test exists.
-    failOnNoDiscoveredTests = false
     finalizedBy(tasks.jacocoTestReport)
 }
 

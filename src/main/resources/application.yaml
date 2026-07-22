@@ -42,3 +42,8 @@ management:
     health:
       probes:
         enabled: true
+      group:
+        # Readiness validates the database (PLAN §8); liveness deliberately does not — a DB
+        # outage should stop traffic, not restart-loop the process.
+        readiness:
+          include: readinessState,db
