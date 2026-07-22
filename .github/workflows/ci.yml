@@ -46,19 +46,49 @@ jobs:
       - name: Bring up the full stack (waits on healthchecks)
         run: docker compose up -d --build --wait --wait-timeout 300
       - name: Probe the stack
-        # Skeleton-stage assertions; M0 hardens this into a real client-credentials token flow
-        # against Keycloak followed by an authenticated API call.
+        # M0 walking-skeleton assertions: infra healthy, app healthy over anonymous HTTP,
+        # security default-deny, and the real Keycloak issuer path — the one place the real
+        # token flow is exercised (integration tests mint their own JWTs, TEST-STRATEGY §2).
         run: |
           set -euo pipefail
+
           curl -sf http://localhost:9000/health/ready > /dev/null
           echo "keycloak ready"
-          code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/api/v1/accounts)
-          if [ "$code" != "401" ]; then
-            echo "expected security default-deny (401) on unauthenticated API call, got $code"
+
+          # Capture-then-grep everywhere: under pipefail, `curl | grep -q` can fail spuriously
+          # with 141 when grep exits at first match and curl catches SIGPIPE.
+          health=$(curl -sf http://localhost:8080/actuator/health)
+          grep -q '"status":"UP"' <<< "$health"
+          echo "app healthy via anonymous /actuator/health"
+
+          for path in /api/v1/accounts /actuator/metrics; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:8080$path")
+            if [ "$code" != "401" ]; then
+              echo "expected security default-deny (401) on unauthenticated $path, got $code"
+              exit 1
+            fi
+          done
+          echo "default-deny active"
+
+          token_response=$(curl -s -X POST \
+            -d grant_type=client_credentials -d client_id=ledger-cli -d client_secret=ledger-cli-dev-secret \
+            http://localhost:8081/realms/ledger/protocol/openid-connect/token)
+          token=$(jq -r '.access_token // empty' <<< "$token_response")
+          if [ -z "$token" ]; then
+            echo "failed to obtain a token from Keycloak (realm import broken? — PLAN §11); response:"
+            echo "$token_response"
             exit 1
           fi
-          echo "app up, default-deny active"
-          docker compose logs app | grep -q "Started LedgerApplication"
+          code=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $token" \
+            http://localhost:8080/actuator/metrics)
+          if [ "$code" != "200" ]; then
+            echo "expected 200 on authenticated actuator call, got $code"
+            exit 1
+          fi
+          echo "token flow OK — Keycloak-issued JWT accepted by the resource server"
+
+          docker compose logs --no-color app > app.log
+          grep -q "Started LedgerApplication" app.log
       - name: Dump logs on failure
         if: failure()
         run: docker compose logs

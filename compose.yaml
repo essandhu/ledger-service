@@ -68,10 +68,17 @@ services:
       keycloak:
         condition: service_healthy
     healthcheck:
-      # TODO(M0): switch to an HTTP /actuator/health probe once the security config permits it
-      # (base image has no curl; M0 adds a proper probe strategy).
-      # bash invoked explicitly: /dev/tcp is a bash feature, and this Ubuntu-based image's /bin/sh is dash.
-      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080"]
+      # Real HTTP probe of /actuator/health — the one anonymous endpoint (SecurityConfig, M0).
+      # The base image ships no curl/wget, so the request goes through bash's /dev/tcp; bash is
+      # invoked explicitly because this Ubuntu-based image's /bin/sh is dash.
+      test:
+        - CMD
+        - bash
+        - -c
+        - >-
+          exec 3<>/dev/tcp/127.0.0.1/8080 &&
+          printf 'GET /actuator/health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3 &&
+          grep -q '"status":"UP"' <&3
       interval: 10s
       timeout: 5s
       retries: 30
