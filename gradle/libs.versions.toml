@@ -1,0 +1,23 @@
+# Single source of truth for dependency versions (PLAN.md §2).
+# Everything Spring-Boot-BOM-managed is intentionally NOT listed here — the BOM
+# (spring-boot-dependencies 4.1.0) pins it; declaring it again would invite drift.
+# Verified current as of 2026-07-22; Renovate keeps this file honest afterwards.
+
+[versions]
+spring-boot = "4.1.0"            # latest 4.1.x GA (re-check: 4.1.1 was SNAPSHOT at pin time)
+springdoc = "3.0.3"              # springdoc 3.x = the Spring Boot 4 line; verify on Boot 4.1 at M1 (release notes only claim 4.0.5)
+archunit = "1.4.2"               # CORE artifact only — archunit-junit5's engine targets JUnit Platform 1.x,
+                                 # incompatible with Boot 4.1's Platform 6 (TNG/ArchUnit#1556); rules run from plain @Test
+java-uuid-generator = "5.2.0"    # UUIDv7 generation (not BOM-managed)
+postgresql-jdbc = "42.7.13"      # OVERRIDE of BOM-managed 42.7.11: CVE-2026-54291 (SCRAM channel-binding
+                                 # downgrade) fixed in 42.7.12 — drop this pin once a Boot patch manages >= 42.7.12
+jacoco = "0.8.15"                # Gradle 9's bundled default is 0.8.14; 0.8.15 is current
+
+[libraries]
+springdoc-openapi-webmvc-ui = { module = "org.springdoc:springdoc-openapi-starter-webmvc-ui", version.ref = "springdoc" }
+archunit-core = { module = "com.tngtech.archunit:archunit", version.ref = "archunit" }
+java-uuid-generator = { module = "com.fasterxml.uuid:java-uuid-generator", version.ref = "java-uuid-generator" }
+postgresql-jdbc = { module = "org.postgresql:postgresql", version.ref = "postgresql-jdbc" }
+
+[plugins]
+spring-boot = { id = "org.springframework.boot", version.ref = "spring-boot" }
