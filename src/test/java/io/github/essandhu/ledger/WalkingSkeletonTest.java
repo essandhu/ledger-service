@@ -10,17 +10,13 @@ import java.util.List;
 import javax.sql.DataSource;
 
 import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
-import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpStatus;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
-import io.github.essandhu.ledger.support.PostgresContainerConfig;
+import io.github.essandhu.ledger.support.LedgerIntegrationTest;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -30,10 +26,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * baseline establishes the two-role grant model (I16), and the security skeleton exposes
  * exactly one anonymous surface — {@code /actuator/health} (the seed of the I13 matrix).
  */
-@SpringBootTest
-@AutoConfigureMockMvc
-@Import(PostgresContainerConfig.class)
-@Tag("integration")
+@LedgerIntegrationTest
 @DisplayName("M0 walking skeleton")
 class WalkingSkeletonTest {
 

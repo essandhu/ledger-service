@@ -50,6 +50,13 @@ dependencies {
 
 tasks.test {
     useJUnitPlatform()
+    // The OpenAPI CI artifact is written by OpenApiDocumentationTest to this Gradle-owned path,
+    // so the test makes no working-directory assumption (and IDE runs behave identically).
+    systemProperty("ledger.openapi.output",
+        layout.buildDirectory.file("openapi/openapi.json").get().asFile.absolutePath)
+    // Declared as a task output so build-cache hits restore it — otherwise a FROM-CACHE test
+    // task on an unchanged-input CI run would upload nothing and fail the openapi artifact step.
+    outputs.file(layout.buildDirectory.file("openapi/openapi.json"))
     finalizedBy(tasks.jacocoTestReport)
 }
 
@@ -71,7 +78,7 @@ tasks.jacocoTestCoverageVerification {
                 counter = "LINE"
                 value = "COVEREDRATIO"
                 // Coverage ratchet (TEST-STRATEGY.md §5): M1 → 0.70, M2 → 0.80, M4 → 0.85, M7 → 0.90.
-                minimum = "0.00".toBigDecimal()
+                minimum = "0.70".toBigDecimal()
             }
         }
     }

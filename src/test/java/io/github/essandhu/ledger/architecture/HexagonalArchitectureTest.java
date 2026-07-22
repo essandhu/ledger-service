@@ -35,13 +35,6 @@ class HexagonalArchitectureTest {
 
     private static final String ROOT = "io.github.essandhu.ledger";
 
-    /*
-     * allowEmptyShould(true) below: the hexagonal packages hold only javadoc package-info files
-     * until M1/M2, and javac emits no .class file for annotation-free package-info — so several
-     * rules currently match zero classes/members. Remove each allowEmptyShould as its package
-     * gains real classes, so a future package rename cannot silently vacuify the rule.
-     */
-
     private static final JavaClasses PRODUCTION_CLASSES = new ClassFileImporter()
             .withImportOption(new ImportOption.DoNotIncludeTests())
             .importPackages(ROOT);
@@ -65,7 +58,6 @@ class HexagonalArchitectureTest {
                 .should().onlyDependOnClassesThat()
                 .resideInAnyPackage("java..", ROOT + ".domain..")
                 .because("the domain core is framework-free (PLAN §3)")
-                .allowEmptyShould(true)
                 .check(PRODUCTION_CLASSES);
     }
 
@@ -84,7 +76,6 @@ class HexagonalArchitectureTest {
                         "org.springframework.security.access.prepost..")
                 .because("declarative transaction and method-security annotations are the only "
                         + "Spring dependencies allowed in the core (PLAN §3, §5)")
-                .allowEmptyShould(true)
                 .check(PRODUCTION_CLASSES);
     }
 
@@ -94,7 +85,6 @@ class HexagonalArchitectureTest {
         noClasses().that().resideInAPackage(ROOT + ".application..")
                 .should().dependOnClassesThat().resideInAPackage(ROOT + ".adapter..")
                 .because("dependencies point inward: adapters implement ports, never the reverse")
-                .allowEmptyShould(true)
                 .check(PRODUCTION_CLASSES);
     }
 
@@ -104,7 +94,6 @@ class HexagonalArchitectureTest {
         slices().matching(ROOT + ".adapter.(*)..")
                 .should().notDependOnEachOther()
                 .because("adapters may only meet through the application core (PLAN §3)")
-                .allowEmptyShould(true)
                 .check(PRODUCTION_CLASSES);
     }
 
@@ -131,29 +120,25 @@ class HexagonalArchitectureTest {
         // other reference the member-level rules below cannot see.
         noClasses().that().resideInAnyPackage(core)
                 .should().dependOnClassesThat(FLOATING_POINT)
-                .allowEmptyShould(true)
                 .check(PRODUCTION_CLASSES);
 
         noFields().that().areDeclaredInClassesThat().resideInAnyPackage(core)
                 .should().haveRawType(FLOATING_POINT)
-                .allowEmptyShould(true)
                 .check(PRODUCTION_CLASSES);
 
         noMethods().that().areDeclaredInClassesThat().resideInAnyPackage(core)
                 .should().haveRawReturnType(FLOATING_POINT)
-                .allowEmptyShould(true)
                 .check(PRODUCTION_CLASSES);
 
         noCodeUnits().that().areDeclaredInClassesThat().resideInAnyPackage(core)
                 .should().haveRawParameterTypes(anyElementThat(FLOATING_POINT))
-                .allowEmptyShould(true)
                 .check(PRODUCTION_CLASSES);
     }
 
     @Test
     @DisplayName("no field injection anywhere in production code")
     void no_field_injection() {
-        NO_CLASSES_SHOULD_USE_FIELD_INJECTION.allowEmptyShould(true).check(PRODUCTION_CLASSES);
+        NO_CLASSES_SHOULD_USE_FIELD_INJECTION.check(PRODUCTION_CLASSES);
     }
 
     @Test
