@@ -1,0 +1,10 @@
+# Normalize to LF in the repo and on checkout (Windows dev machine ↔ Linux CI parity).
+* text=auto eol=lf
+
+# Windows batch scripts need CRLF.
+*.bat text eol=crlf
+gradlew.bat text eol=crlf
+
+# Binaries.
+*.jar binary
+*.png binary

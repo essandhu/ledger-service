@@ -1,0 +1,14 @@
+.gradle/
+build/
+out/
+
+.idea/
+*.iml
+.vscode/
+.DS_Store
+
+.env
+
+# Local planning documents — the public docs are README.md and docs/adr/.
+docs/PLAN.md
+docs/TEST-STRATEGY.md
