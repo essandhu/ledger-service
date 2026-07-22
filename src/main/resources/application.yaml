@@ -1,0 +1,44 @@
+spring:
+  application:
+    name: ledger
+
+  datasource:
+    # Runtime role: SELECT/INSERT only on ledger tables — no UPDATE/DELETE on entries/postings
+    # (immutability invariant I3; grants are applied by the Flyway baseline migration in M0/M1).
+    url: ${LEDGER_DB_URL:jdbc:postgresql://localhost:5432/ledger}
+    username: ${LEDGER_DB_USER:ledger_app}
+    password: ${LEDGER_DB_PASSWORD:ledger_app}
+
+  flyway:
+    # Migrations run as the schema-owning role, never as the runtime role.
+    user: ${LEDGER_MIGRATE_USER:ledger_migrate}
+    password: ${LEDGER_MIGRATE_PASSWORD:ledger_migrate}
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate   # schema is Flyway's job; Hibernate only checks it
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # Keycloak realm issuer; compose overrides via env (incl. jwk-set-uri for in-network JWKS).
+          issuer-uri: ${LEDGER_JWT_ISSUER_URI:http://localhost:8081/realms/ledger}
+
+  batch:
+    jdbc:
+      initialize-schema: never   # BATCH_* tables arrive via a Flyway migration in M6
+
+server:
+  port: 8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
