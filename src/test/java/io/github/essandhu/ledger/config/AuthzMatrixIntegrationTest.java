@@ -1,0 +1,182 @@
+package io.github.essandhu.ledger.config;
+
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.stream.Stream;
+
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInstance;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.assertj.MockMvcTester;
+import org.springframework.test.web.servlet.assertj.MvcTestResult;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
+
+import com.jayway.jsonpath.JsonPath;
+
+import io.github.essandhu.ledger.support.LedgerIntegrationTest;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
+
+/**
+ * I13: the full endpoint × principal matrix (PLAN §5), as ONE data table so every milestone
+ * appends rows. Principals: no token → 401; authenticated without the required role → 403 —
+ * including a valid token with zero LEDGER roles, and including LEDGER_WRITE, which guards no
+ * M1 endpoint. There is deliberately no role hierarchy: ADMIN does NOT imply READ (composite
+ * roles in Keycloak are where convenience bundles belong, PLAN §7) — so ADMIN-on-GET is a 403
+ * cell, not a convenience 200.
+ *
+ * <p>Tokens carry raw {@code realm_access} claims and run through the production
+ * {@link LedgerRealmRoleConverter} — the mapping is on the tested path (the remaining leg,
+ * real-issuer wiring, is the CI smoke's job). 401/403 responses are asserted to be RFC 9457
+ * problem documents, not empty bodies.
+ */
+@LedgerIntegrationTest
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
+@DisplayName("I13: authorization matrix")
+class AuthzMatrixIntegrationTest {
+
+    private static final String NONE = "NONE";
+    private static final String NO_ROLES = "NO_ROLES";
+
+    @Autowired
+    private MockMvcTester mvc;
+
+    private String existingId;
+
+    @BeforeAll
+    void createFixtureAccount() throws Exception {
+        MvcTestResult result = mvc.post().uri("/api/v1/accounts")
+                .with(principal("LEDGER_ADMIN"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"name": "authz-fixture-%s", "currency": "EUR", "type": "ASSET",
+                         "allowNegative": false}
+                        """.formatted(UUID.randomUUID()))
+                .exchange();
+        assertThat(result).hasStatus(HttpStatus.CREATED);
+        existingId = JsonPath.read(result.getResponse().getContentAsString(), "$.id");
+    }
+
+    private static RequestPostProcessor principal(String role) {
+        List<String> roles = switch (role) {
+            case NO_ROLES -> List.of("offline_access"); // authenticated, no LEDGER_* roles
+            default -> List.of(role);
+        };
+        return jwt().jwt(j -> j.claim("realm_access", Map.of("roles", roles)))
+                .authorities(new LedgerRealmRoleConverter());
+    }
+
+    record Cell(String method, String uri, String principal, int expected) {
+    }
+
+    static Stream<Cell> matrix() {
+        return Stream.of(
+                // POST /accounts — LEDGER_ADMIN only (201 exercised in fixture + API tests; the
+                // right-role cell here uses an invalid body: authz decides before validation,
+                // so 400 proves access was granted without creating noise rows).
+                new Cell("POST", "/api/v1/accounts", NONE, 401),
+                new Cell("POST", "/api/v1/accounts", NO_ROLES, 403),
+                new Cell("POST", "/api/v1/accounts", "LEDGER_READ", 403),
+                new Cell("POST", "/api/v1/accounts", "LEDGER_WRITE", 403),
+                new Cell("POST", "/api/v1/accounts", "LEDGER_ADMIN", 400),
+
+                // GET /accounts — LEDGER_READ only (no hierarchy: ADMIN gets 403)
+                new Cell("GET", "/api/v1/accounts", NONE, 401),
+                new Cell("GET", "/api/v1/accounts", NO_ROLES, 403),
+                new Cell("GET", "/api/v1/accounts", "LEDGER_READ", 200),
+                new Cell("GET", "/api/v1/accounts", "LEDGER_WRITE", 403),
+                new Cell("GET", "/api/v1/accounts", "LEDGER_ADMIN", 403),
+
+                // GET /accounts/{existing}
+                new Cell("GET", "EXISTING", NONE, 401),
+                new Cell("GET", "EXISTING", NO_ROLES, 403),
+                new Cell("GET", "EXISTING", "LEDGER_READ", 200),
+                new Cell("GET", "EXISTING", "LEDGER_WRITE", 403),
+                new Cell("GET", "EXISTING", "LEDGER_ADMIN", 403),
+
+                // HEAD is served by @GetMapping handlers — the matchers must cover it
+                // explicitly or it would fall through past the role rules.
+                new Cell("HEAD", "/api/v1/accounts", NONE, 401),
+                new Cell("HEAD", "/api/v1/accounts", NO_ROLES, 403),
+                new Cell("HEAD", "/api/v1/accounts", "LEDGER_READ", 200),
+                new Cell("HEAD", "EXISTING", NO_ROLES, 403),
+                new Cell("HEAD", "EXISTING", "LEDGER_READ", 200),
+
+                // namespace backstop: unlisted methods inside /api/v1 are denied for everyone
+                new Cell("PUT", "/api/v1/accounts", "LEDGER_ADMIN", 403),
+                new Cell("DELETE", "EXISTING", "LEDGER_ADMIN", 403),
+
+                // PATCH /accounts/{existing} — LEDGER_ADMIN only ({} is a legal no-op PATCH)
+                new Cell("PATCH", "EXISTING", NONE, 401),
+                new Cell("PATCH", "EXISTING", NO_ROLES, 403),
+                new Cell("PATCH", "EXISTING", "LEDGER_READ", 403),
+                new Cell("PATCH", "EXISTING", "LEDGER_WRITE", 403),
+                new Cell("PATCH", "EXISTING", "LEDGER_ADMIN", 200),
+
+                // springdoc surfaces: any authenticated principal, no role required
+                new Cell("GET", "/v3/api-docs", NONE, 401),
+                new Cell("GET", "/v3/api-docs", NO_ROLES, 200),
+                new Cell("GET", "/swagger-ui.html", NONE, 401),
+                new Cell("GET", "/swagger-ui.html", NO_ROLES, 302),
+
+                // actuator: health is THE anonymous surface; everything else needs a token
+                new Cell("GET", "/actuator/health", NONE, 200),
+                new Cell("GET", "/actuator/metrics", NONE, 401),
+                new Cell("GET", "/actuator/metrics", NO_ROLES, 200),
+                new Cell("GET", "/actuator/prometheus", NONE, 401),
+                new Cell("GET", "/actuator/prometheus", NO_ROLES, 200));
+    }
+
+    @ParameterizedTest(name = "{0} {1} as {2} → {3}")
+    @MethodSource("matrix")
+    @DisplayName("endpoint × principal")
+    void matrix_cell(Cell cell) {
+        String uri = "EXISTING".equals(cell.uri()) ? "/api/v1/accounts/" + existingId : cell.uri();
+        var request = switch (cell.method()) {
+            case "GET" -> mvc.get().uri(uri);
+            case "HEAD" -> mvc.head().uri(uri);
+            case "POST" -> mvc.post().uri(uri).contentType(MediaType.APPLICATION_JSON).content("{}");
+            case "PATCH" -> mvc.patch().uri(uri).contentType(MediaType.APPLICATION_JSON).content("{}");
+            case "PUT" -> mvc.put().uri(uri).contentType(MediaType.APPLICATION_JSON).content("{}");
+            case "DELETE" -> mvc.delete().uri(uri);
+            default -> throw new IllegalArgumentException(cell.method());
+        };
+        if (!NONE.equals(cell.principal())) {
+            request = request.with(principal(cell.principal()));
+        }
+        MvcTestResult result = request.exchange();
+        assertThat(result).hasStatus(cell.expected());
+        if (cell.expected() == 401 || cell.expected() == 403) {
+            // PLAN §5: errors are RFC 9457 — including the security layer's, which by Spring
+            // default would be empty bodies. The WWW-Authenticate convention is kept alongside.
+            assertThat(result).hasContentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON);
+            if (cell.expected() == 401) {
+                assertThat(result.getResponse().getHeader("WWW-Authenticate")).startsWith("Bearer");
+            }
+        }
+    }
+
+    @Test
+    @DisplayName("precedence: authorization is decided before existence — no enumeration leak")
+    void wrong_role_beats_unknown_id() {
+        String unknown = "/api/v1/accounts/" + UUID.randomUUID();
+        assertThat(mvc.get().uri(unknown).with(principal("LEDGER_ADMIN"))) // wrong role for GET
+                .hasStatus(HttpStatus.FORBIDDEN);
+        assertThat(mvc.get().uri(unknown).with(principal("LEDGER_READ"))) // right role
+                .hasStatus(HttpStatus.NOT_FOUND);
+        assertThat(mvc.patch().uri(unknown).contentType(MediaType.APPLICATION_JSON).content("{}")
+                .with(principal("LEDGER_READ"))) // wrong role for PATCH
+                .hasStatus(HttpStatus.FORBIDDEN);
+        assertThat(mvc.patch().uri(unknown).contentType(MediaType.APPLICATION_JSON).content("{}")
+                .with(principal("LEDGER_ADMIN"))) // right role
+                .hasStatus(HttpStatus.NOT_FOUND);
+    }
+}

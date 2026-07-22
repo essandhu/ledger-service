@@ -23,6 +23,19 @@
       "implicitFlowEnabled": false,
       "directAccessGrantsEnabled": false,
       "fullScopeAllowed": true
+    },
+    {
+      "clientId": "ledger-readonly",
+      "name": "Read-only demo client — proves the 403 half of the role matrix (I13)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "ledger-readonly-dev-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "fullScopeAllowed": true
     }
   ],
   "users": [
@@ -31,6 +44,12 @@
       "enabled": true,
       "serviceAccountClientId": "ledger-cli",
       "realmRoles": ["LEDGER_ADMIN", "LEDGER_WRITE", "LEDGER_READ"]
+    },
+    {
+      "username": "service-account-ledger-readonly",
+      "enabled": true,
+      "serviceAccountClientId": "ledger-readonly",
+      "realmRoles": ["LEDGER_READ"]
     }
   ]
 }

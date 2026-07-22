@@ -16,6 +16,17 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  * privilege split ({@code ledger_app} runtime, {@code ledger_migrate} for Flyway; invariants
  * I3 / I16). The container lifecycle is still owned by the Spring context, so one container is
  * shared per cached context (TEST-STRATEGY §2).
+ *
+ * <p><b>M1 measurement + decision (TEST-STRATEGY §2's open question):</b> all integration
+ * classes compose the identical annotation set via {@link LedgerIntegrationTest}, giving ONE
+ * cached context and ONE container for the whole suite (verified: a single HikariPool /
+ * EntityManagerFactory shutdown in the test log). Full {@code test} task incl. container
+ * startup: ~29 s wall-clock (Windows 11 / Docker Desktop, 2026-07-22); 115 tests. Schema
+ * isolation: none needed yet — classes share the schema and follow the additive-safe
+ * discipline (rows carry per-test unique marker names; no assertion quantifies over rows the
+ * test did not create — see AccountApiIntegrationTest). Revisit (per-class schemas or
+ * clean-migrate) only when a class genuinely cannot be made additive-safe; that class, not the
+ * suite, is the trigger.
  */
 @TestConfiguration(proxyBeanMethods = false)
 public class PostgresContainerConfig {
