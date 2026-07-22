@@ -1,6 +1,7 @@
 .gradle/
 build/
-out/
+# Root-anchored: IDE output only — must not match src/**/application/port/out/.
+/out/
 
 .idea/
 *.iml
