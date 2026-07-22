@@ -1,5 +1,7 @@
 # Ledger Service
 
+[![CI](https://github.com/essandhu/ledger-service/actions/workflows/ci.yml/badge.svg)](https://github.com/essandhu/ledger-service/actions/workflows/ci.yml)
+
 A standalone, production-grade **double-entry ledger service** (Java 21 · Spring Boot 4.1 ·
 PostgreSQL 18). The differentiator: **every guarantee is backed by an automated test that proves
 it** — balanced entries, immutable history, overdraft safety under concurrency, idempotent writes,
