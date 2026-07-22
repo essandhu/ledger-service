@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build, test, coverage gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@v6
+      # build runs: compile, all test suites (Testcontainers → real PostgreSQL on the runner's
+      # Docker), ArchUnit rules, and the JaCoCo coverage gate (ratchet: TEST-STRATEGY.md §5).
+      - run: ./gradlew build
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: coverage-report
+          path: build/reports/jacoco/test/html
+          if-no-files-found: ignore
+
+  smoke:
+    name: docker-compose smoke test
+    runs-on: ubuntu-latest
+    needs: build
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - name: Validate compose file
+        run: docker compose config -q
+      - name: Bring up the full stack (waits on healthchecks)
+        run: docker compose up -d --build --wait --wait-timeout 300
+      - name: Probe the stack
+        # Skeleton-stage assertions; M0 hardens this into a real client-credentials token flow
+        # against Keycloak followed by an authenticated API call.
+        run: |
+          set -euo pipefail
+          curl -sf http://localhost:9000/health/ready > /dev/null
+          echo "keycloak ready"
+          code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/api/v1/accounts)
+          if [ "$code" != "401" ]; then
+            echo "expected security default-deny (401) on unauthenticated API call, got $code"
+            exit 1
+          fi
+          echo "app up, default-deny active"
+          docker compose logs app | grep -q "Started LedgerApplication"
+      - name: Dump logs on failure
+        if: failure()
+        run: docker compose logs
+      - name: Tear down
+        if: always()
+        run: docker compose down -v
