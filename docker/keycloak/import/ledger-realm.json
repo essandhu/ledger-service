@@ -1,0 +1,36 @@
+{
+  "realm": "ledger",
+  "enabled": true,
+  "displayName": "Ledger Service (dev)",
+  "accessTokenLifespan": 900,
+  "roles": {
+    "realm": [
+      { "name": "LEDGER_ADMIN", "description": "Account lifecycle management" },
+      { "name": "LEDGER_WRITE", "description": "Post transfers, journal entries, reversals" },
+      { "name": "LEDGER_READ", "description": "Balances, statements, entry lookups" }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "ledger-cli",
+      "name": "Ledger demo / smoke-test client (client-credentials)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "ledger-cli-dev-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "fullScopeAllowed": true
+    }
+  ],
+  "users": [
+    {
+      "username": "service-account-ledger-cli",
+      "enabled": true,
+      "serviceAccountClientId": "ledger-cli",
+      "realmRoles": ["LEDGER_ADMIN", "LEDGER_WRITE", "LEDGER_READ"]
+    }
+  ]
+}
