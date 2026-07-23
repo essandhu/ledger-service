@@ -1,9 +1,11 @@
 package io.github.essandhu.ledger.support.fakes;
 
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 
 import io.github.essandhu.ledger.application.port.in.AccountFilter;
@@ -43,6 +45,18 @@ public final class FakeAccountRepository implements AccountRepository {
     @Override
     public Optional<Account> findById(AccountId id) {
         return Optional.ofNullable(rows.get(id));
+    }
+
+    @Override
+    public List<Account> findByIds(Collection<AccountId> ids) {
+        // The port promises no order; id-ordered here mirrors the adapter's listing habit and
+        // keeps the fake deterministic. Missing ids are simply absent, per the port contract.
+        return ids.stream()
+                .distinct()
+                .map(rows::get)
+                .filter(Objects::nonNull)
+                .sorted(Comparator.comparing(account -> account.id().value()))
+                .toList();
     }
 
     @Override

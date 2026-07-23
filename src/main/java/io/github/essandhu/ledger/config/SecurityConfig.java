@@ -44,6 +44,20 @@ class SecurityConfig {
                         .hasRole("LEDGER_READ")
                         .requestMatchers(HttpMethod.HEAD, "/api/v1/accounts", "/api/v1/accounts/*")
                         .hasRole("LEDGER_READ")
+                        // M2 money movers (PLAN §5): one role, LEDGER_WRITE — no hierarchy, so
+                        // ADMIN posts nothing and WRITE reads nothing.
+                        .requestMatchers(HttpMethod.POST,
+                                "/api/v1/journal-entries",
+                                "/api/v1/journal-entries/*/reversal",
+                                "/api/v1/transfers")
+                        .hasRole("LEDGER_WRITE")
+                        // HEAD listed explicitly, same reason as the account matchers above.
+                        // Only the item GET exists — the collection listing is M3, so
+                        // GET /api/v1/journal-entries stays on the backstop below.
+                        .requestMatchers(HttpMethod.GET, "/api/v1/journal-entries/*")
+                        .hasRole("LEDGER_READ")
+                        .requestMatchers(HttpMethod.HEAD, "/api/v1/journal-entries/*")
+                        .hasRole("LEDGER_READ")
                         // Namespace backstop: within /api/v1 only the (method, path) pairs
                         // granted above exist — new endpoints must add explicit rules, and an
                         // unlisted method (PUT, DELETE, ...) is 403 for everyone.

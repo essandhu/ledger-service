@@ -105,6 +105,18 @@ class AccountSchemaIntegrationTest {
                 insert.setString(2, "schema-probe-" + id);
                 assertThat(insert.executeUpdate()).isEqualTo(1);
             }
+            // Raw fixtures honor by hand what the create-account transaction honors in code:
+            // every account gets its zero snapshot row (V2 forward-contract, ADR-0003 lock
+            // protocol), or JournalSchemaIntegrationTest's global every_account_has_a_balance_row
+            // assertion would rightly convict this probe. Doubles as a behavioral proof of the
+            // V3 INSERT grant on account_balance for the runtime role.
+            try (PreparedStatement balance = connection.prepareStatement("""
+                    INSERT INTO account_balance (account_id, balance, posting_count, updated_at)
+                    VALUES (?, 0, 0, now())
+                    """)) {
+                balance.setObject(1, id);
+                assertThat(balance.executeUpdate()).isEqualTo(1);
+            }
             try (PreparedStatement update = connection.prepareStatement(
                     "UPDATE account SET name = ?, updated_at = now() WHERE id = ?")) {
                 update.setString(1, "schema-probe-renamed-" + id);

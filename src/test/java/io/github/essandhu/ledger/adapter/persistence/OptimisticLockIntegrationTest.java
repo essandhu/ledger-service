@@ -53,6 +53,12 @@ class OptimisticLockIntegrationTest {
         Account account = Account.open(id, "lock-probe-" + id.value(), new CurrencyCode("EUR"),
                 AccountType.ASSET, false, Instant.parse("2026-07-22T10:00:00Z"));
         transactionTemplate.executeWithoutResult(tx -> accounts.insert(account));
+        // This fixture inserts through the port, below the use-case layer, so it must honor by
+        // hand what the create-account transaction honors in code: every account gets its zero
+        // snapshot row (V2 forward-contract, ADR-0003 lock protocol), or the global
+        // every_account_has_a_balance_row assertion in JournalSchemaIntegrationTest would
+        // rightly convict this fixture.
+        insertBalanceRowOutOfBand(id);
 
         assertThatThrownBy(() -> transactionTemplate.executeWithoutResult(tx -> {
             // Read inside the transaction (loads version N into the persistence context) ...
@@ -69,6 +75,19 @@ class OptimisticLockIntegrationTest {
         assertThat(persistedName)
                 .as("the stale rename must not have been applied")
                 .startsWith("lock-probe-");
+    }
+
+    private void insertBalanceRowOutOfBand(AccountId id) {
+        try (Connection connection = dataSource.getConnection();
+             PreparedStatement insert = connection.prepareStatement("""
+                     INSERT INTO account_balance (account_id, balance, posting_count, updated_at)
+                     VALUES (?, 0, 0, now())
+                     """)) {
+            insert.setObject(1, id.value());
+            assertThat(insert.executeUpdate()).isEqualTo(1);
+        } catch (java.sql.SQLException e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     private void bumpVersionOutOfBand(AccountId id) {

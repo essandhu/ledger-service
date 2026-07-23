@@ -2,6 +2,8 @@ package io.github.essandhu.ledger.architecture;
 
 import java.util.Set;
 
+import jakarta.persistence.Table;
+
 import com.tngtech.archunit.base.DescribedPredicate;
 import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaClasses;
@@ -9,6 +11,7 @@ import com.tngtech.archunit.core.domain.JavaConstructorCall;
 import com.tngtech.archunit.core.domain.JavaMethodCall;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
+import org.hibernate.annotations.Immutable;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -132,6 +135,49 @@ class HexagonalArchitectureTest {
 
         noCodeUnits().that().areDeclaredInClassesThat().resideInAnyPackage(core)
                 .should().haveRawParameterTypes(anyElementThat(FLOATING_POINT))
+                .check(PRODUCTION_CLASSES);
+    }
+
+    @Test
+    @DisplayName("I3 (layer 2): entities mapping the append-only journal tables are @Immutable")
+    void journal_tables_map_through_immutable_entities() {
+        // Keyed on the physical table name, not the entity class name: a renamed or additional
+        // entity mapping journal_entry/posting must still carry the annotation. ArchUnit's
+        // default fail-on-empty-should keeps this rule from passing vacuously if the entities
+        // are ever moved or renamed away.
+        DescribedPredicate<JavaClass> mapsAppendOnlyTable =
+                new DescribedPredicate<>("map the append-only tables journal_entry or posting") {
+                    private final Set<String> tables = Set.of("journal_entry", "posting");
+
+                    @Override
+                    public boolean test(JavaClass input) {
+                        return input.tryGetAnnotationOfType(Table.class)
+                                .map(table -> tables.contains(table.name()))
+                                .orElse(false);
+                    }
+                };
+
+        classes().that(mapsAppendOnlyTable)
+                .should().beAnnotatedWith(Immutable.class)
+                .because("Hibernate must never dirty-check or UPDATE journal rows — the ORM layer "
+                        + "of the append-only guarantee (I3, PLAN §4.4; layers 1 and 3 are the "
+                        + "mutator-free domain records and the absent UPDATE/DELETE grants)")
+                .check(PRODUCTION_CLASSES);
+    }
+
+    @Test
+    @DisplayName("micrometer stays in adapters and config — never in the core")
+    void micrometer_only_in_adapters_and_config() {
+        // application_is_spring_free_except_transactions deliberately has NO micrometer
+        // allowance: posting metrics live in the config-package decorator and the lock-wait
+        // timer in the persistence adapter (PLAN §8). This rule states that placement decision
+        // positively, so a future "just inject MeterRegistry into the service" shortcut fails
+        // here with the reason attached rather than only tripping the package-list rule above.
+        noClasses().that().resideOutsideOfPackages(ROOT + ".adapter..", ROOT + ".config..")
+                .should().dependOnClassesThat().resideInAPackage("io.micrometer..")
+                .because("metrics are infrastructure: the domain and application core stay "
+                        + "micrometer-free; instrumentation wraps the core from config/adapters "
+                        + "(PLAN §3, §8)")
                 .check(PRODUCTION_CLASSES);
     }
 

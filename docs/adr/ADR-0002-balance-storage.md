@@ -15,7 +15,8 @@ balances, with very different tolerances:
    [ADR-0003](ADR-0003-concurrency-control.md) — its cost is added to lock hold time, and lock
    hold time is the reciprocal of a hot account's maximum throughput. It must also be
    **synchronously** correct: an overdraft admitted now and detected later is a broken guarantee,
-   not a delayed one.
+   not a delayed one. (The close-time zero-balance check of PLAN §4.5 is a second consumer with
+   this same profile, sharing the same critical section.)
 2. **Client balance reads.** `GET /accounts/{id}/balance` is specified O(1) (PLAN §5);
    as-of-timestamp reads are specified exact per account (PLAN §4.6, invariant I10).
 
@@ -65,7 +66,10 @@ UPDATE account_balance
 
 As-of/historical balances are **always** computed from postings
 (`SUM(amount) WHERE account_id = ? AND posted_at <= ?`), never from the snapshot; the snapshot
-serves exactly two reads: the current-balance endpoint and the overdraft check under lock.
+serves exactly three reads: the current-balance endpoint, the overdraft check under lock, and —
+since M2 implemented account closing — the close-time zero-balance check (PLAN §4.5), which runs
+under the same ADR-0003 lock and shares the overdraft check's tolerance class: synchronous, O(1),
+never eventual.
 
 Decisive reasons:
 

@@ -5,6 +5,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -113,7 +114,12 @@ class AccountApiIntegrationTest {
         @DisplayName("POST creates an ACTIVE account: 201, Location, Clock-driven timestamps")
         void post_creates_active_account() {
             String name = marker("checking");
-            Instant before = Instant.now();
+            // Truncated to match the production Clock's microsecond tick (ClockConfig): createdAt
+            // is micros-truncated, but a raw Instant.now() captured in the SAME microsecond keeps
+            // its sub-microsecond digits and can exceed createdAt — a spurious window failure.
+            // Flooring the lower bound to the tick makes the comparison sound; the upper bound
+            // needs no truncation (truncated createdAt <= real time <= after).
+            Instant before = Instant.now().truncatedTo(ChronoUnit.MICROS);
             MvcTestResult result = post("""
                     {"name": "%s", "currency": "JPY", "type": "LIABILITY", "allowNegative": true}
                     """.formatted(name));

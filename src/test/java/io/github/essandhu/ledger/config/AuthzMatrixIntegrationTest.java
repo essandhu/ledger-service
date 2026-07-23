@@ -28,10 +28,11 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 /**
  * I13: the full endpoint × principal matrix (PLAN §5), as ONE data table so every milestone
  * appends rows. Principals: no token → 401; authenticated without the required role → 403 —
- * including a valid token with zero LEDGER roles, and including LEDGER_WRITE, which guards no
- * M1 endpoint. There is deliberately no role hierarchy: ADMIN does NOT imply READ (composite
- * roles in Keycloak are where convenience bundles belong, PLAN §7) — so ADMIN-on-GET is a 403
- * cell, not a convenience 200.
+ * including a valid token with zero LEDGER roles. Since M2, LEDGER_WRITE guards the money
+ * movers (journal entries, transfers, reversals) and nothing else. There is deliberately no
+ * role hierarchy: ADMIN does NOT imply READ (composite roles in Keycloak are where convenience
+ * bundles belong, PLAN §7) — so ADMIN-on-GET is a 403 cell, not a convenience 200, and
+ * ADMIN-on-POST-entry likewise.
  *
  * <p>Tokens carry raw {@code realm_access} claims and run through the production
  * {@link LedgerRealmRoleConverter} — the mapping is on the tested path (the remaining leg,
@@ -50,9 +51,10 @@ class AuthzMatrixIntegrationTest {
     private MockMvcTester mvc;
 
     private String existingId;
+    private String entryId;
 
     @BeforeAll
-    void createFixtureAccount() throws Exception {
+    void createFixtures() throws Exception {
         MvcTestResult result = mvc.post().uri("/api/v1/accounts")
                 .with(principal("LEDGER_ADMIN"))
                 .contentType(MediaType.APPLICATION_JSON)
@@ -63,6 +65,36 @@ class AuthzMatrixIntegrationTest {
                 .exchange();
         assertThat(result).hasStatus(HttpStatus.CREATED);
         existingId = JsonPath.read(result.getResponse().getContentAsString(), "$.id");
+
+        // M2 entry sentinel: two accounts as ADMIN, one transfer as WRITE — each fixture built
+        // with exactly the role the matrix says may build it. allowNegative on the target: a
+        // transfer credits it (−amount), and this fixture must never trip the overdraft rule.
+        String source = createFixtureAccount("authz-entry-src");
+        String target = createFixtureAccount("authz-entry-tgt");
+        MvcTestResult transfer = mvc.post().uri("/api/v1/transfers")
+                .with(principal("LEDGER_WRITE"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"sourceAccountId": "%s", "targetAccountId": "%s",
+                         "amount": {"amount": 100, "currency": "EUR"},
+                         "description": "authz-entry-fixture"}
+                        """.formatted(source, target))
+                .exchange();
+        assertThat(transfer).hasStatus(HttpStatus.CREATED);
+        entryId = JsonPath.read(transfer.getResponse().getContentAsString(), "$.id");
+    }
+
+    private String createFixtureAccount(String label) throws Exception {
+        MvcTestResult result = mvc.post().uri("/api/v1/accounts")
+                .with(principal("LEDGER_ADMIN"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"name": "%s-%s", "currency": "EUR", "type": "ASSET",
+                         "allowNegative": true}
+                        """.formatted(label, UUID.randomUUID()))
+                .exchange();
+        assertThat(result).hasStatus(HttpStatus.CREATED);
+        return JsonPath.read(result.getResponse().getContentAsString(), "$.id");
     }
 
     private static RequestPostProcessor principal(String role) {
@@ -121,6 +153,45 @@ class AuthzMatrixIntegrationTest {
                 new Cell("PATCH", "EXISTING", "LEDGER_WRITE", 403),
                 new Cell("PATCH", "EXISTING", "LEDGER_ADMIN", 200),
 
+                // ── M2 money movers (PLAN §5): LEDGER_WRITE only — no hierarchy, ADMIN 403.
+                // Right-role POST cells use an invalid body {} → 400 (access proven without
+                // creating rows, same trick as POST /accounts above).
+                new Cell("POST", "/api/v1/journal-entries", NONE, 401),
+                new Cell("POST", "/api/v1/journal-entries", NO_ROLES, 403),
+                new Cell("POST", "/api/v1/journal-entries", "LEDGER_READ", 403),
+                new Cell("POST", "/api/v1/journal-entries", "LEDGER_ADMIN", 403),
+                new Cell("POST", "/api/v1/journal-entries", "LEDGER_WRITE", 400),
+
+                new Cell("POST", "/api/v1/transfers", NONE, 401),
+                new Cell("POST", "/api/v1/transfers", NO_ROLES, 403),
+                new Cell("POST", "/api/v1/transfers", "LEDGER_READ", 403),
+                new Cell("POST", "/api/v1/transfers", "LEDGER_ADMIN", 403),
+                new Cell("POST", "/api/v1/transfers", "LEDGER_WRITE", 400),
+
+                // Reversal: {} is a LEGAL body here (the description is optional), so the {}
+                // trick would create a row — the right-role no-rows proof rides on a malformed
+                // path id instead: authorization decides before path-variable conversion, so
+                // 400 (not 403) proves access was granted, and nothing can be reversed.
+                new Cell("POST", "ENTRY_REVERSAL", NONE, 401),
+                new Cell("POST", "ENTRY_REVERSAL", NO_ROLES, 403),
+                new Cell("POST", "ENTRY_REVERSAL", "LEDGER_READ", 403),
+                new Cell("POST", "ENTRY_REVERSAL", "LEDGER_ADMIN", 403),
+                new Cell("POST", "/api/v1/journal-entries/not-a-uuid/reversal", "LEDGER_WRITE", 400),
+
+                // GET /journal-entries/{entry} — LEDGER_READ only (no hierarchy: WRITE cannot
+                // read back what it posts; composite roles in Keycloak are the convenience).
+                new Cell("GET", "ENTRY", NONE, 401),
+                new Cell("GET", "ENTRY", NO_ROLES, 403),
+                new Cell("GET", "ENTRY", "LEDGER_READ", 200),
+                new Cell("GET", "ENTRY", "LEDGER_WRITE", 403),
+                new Cell("GET", "ENTRY", "LEDGER_ADMIN", 403),
+                new Cell("HEAD", "ENTRY", NO_ROLES, 403),
+                new Cell("HEAD", "ENTRY", "LEDGER_READ", 200),
+
+                // The entry collection GET is M3 — until then the namespace backstop holds it,
+                // even for the right-role-to-be.
+                new Cell("GET", "/api/v1/journal-entries", "LEDGER_READ", 403),
+
                 // springdoc surfaces: any authenticated principal, no role required
                 new Cell("GET", "/v3/api-docs", NONE, 401),
                 new Cell("GET", "/v3/api-docs", NO_ROLES, 200),
@@ -139,7 +210,12 @@ class AuthzMatrixIntegrationTest {
     @MethodSource("matrix")
     @DisplayName("endpoint × principal")
     void matrix_cell(Cell cell) {
-        String uri = "EXISTING".equals(cell.uri()) ? "/api/v1/accounts/" + existingId : cell.uri();
+        String uri = switch (cell.uri()) {
+            case "EXISTING" -> "/api/v1/accounts/" + existingId;
+            case "ENTRY" -> "/api/v1/journal-entries/" + entryId;
+            case "ENTRY_REVERSAL" -> "/api/v1/journal-entries/" + entryId + "/reversal";
+            default -> cell.uri();
+        };
         var request = switch (cell.method()) {
             case "GET" -> mvc.get().uri(uri);
             case "HEAD" -> mvc.head().uri(uri);
