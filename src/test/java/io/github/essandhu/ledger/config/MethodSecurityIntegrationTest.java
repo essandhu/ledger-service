@@ -17,11 +17,15 @@ import io.github.essandhu.ledger.application.port.in.CreateAccountUseCase;
 import io.github.essandhu.ledger.application.port.in.CreateAccountUseCase.CreateAccountCommand;
 import io.github.essandhu.ledger.application.port.in.EntryNotFound;
 import io.github.essandhu.ledger.application.port.in.GetAccountQuery;
+import io.github.essandhu.ledger.application.port.in.GetBalanceQuery;
 import io.github.essandhu.ledger.application.port.in.GetJournalEntryQuery;
 import io.github.essandhu.ledger.application.port.in.PostJournalEntryUseCase;
 import io.github.essandhu.ledger.application.port.in.PostJournalEntryUseCase.PostEntryCommand;
+import io.github.essandhu.ledger.application.port.in.GetStatementQuery;
 import io.github.essandhu.ledger.application.port.in.ReverseEntryUseCase;
 import io.github.essandhu.ledger.application.port.in.ReverseEntryUseCase.ReverseCommand;
+import io.github.essandhu.ledger.application.port.in.StatementFilter;
+import io.github.essandhu.ledger.application.port.in.StatementSpec;
 import io.github.essandhu.ledger.application.port.in.TransferFundsUseCase;
 import io.github.essandhu.ledger.application.port.in.TransferFundsUseCase.TransferCommand;
 import io.github.essandhu.ledger.domain.error.UnknownPostingAccount;
@@ -68,6 +72,12 @@ class MethodSecurityIntegrationTest {
 
     @Autowired
     private GetJournalEntryQuery getEntry;
+
+    @Autowired
+    private GetBalanceQuery getBalance;
+
+    @Autowired
+    private GetStatementQuery getStatement;
 
     @AfterEach
     void clearSecurityContext() {
@@ -147,6 +157,34 @@ class MethodSecurityIntegrationTest {
         authenticateWithRoles("LEDGER_READ");
         assertThatThrownBy(() -> getEntry.byId(new EntryId(UUID.randomUUID())))
                 .isInstanceOf(EntryNotFound.class);
+    }
+
+    @Test
+    @DisplayName("M3 read ports deny wrong roles at the method boundary")
+    void balance_ports_deny_wrong_roles_at_the_method_boundary() {
+        authenticateWithRoles("LEDGER_WRITE", "LEDGER_ADMIN"); // every role EXCEPT the read role
+        AccountId anyId = new AccountId(UUID.randomUUID());
+        assertThatThrownBy(() -> getBalance.current(anyId))
+                .isInstanceOf(AccessDeniedException.class);
+        assertThatThrownBy(() -> getBalance.asOf(anyId, java.time.Instant.EPOCH))
+                .isInstanceOf(AccessDeniedException.class);
+        assertThatThrownBy(() -> getStatement.statement(anyId, StatementFilter.unbounded(),
+                StatementSpec.firstPage(1)))
+                .isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
+    @DisplayName("M3 read ports: the right role reaches domain logic — 404s, not access denials")
+    void balance_ports_right_role_reaches_domain_logic() {
+        authenticateWithRoles("LEDGER_READ");
+        AccountId unknown = new AccountId(UUID.randomUUID());
+        assertThatThrownBy(() -> getBalance.current(unknown))
+                .isInstanceOf(AccountNotFound.class);
+        assertThatThrownBy(() -> getBalance.asOf(unknown, java.time.Instant.EPOCH))
+                .isInstanceOf(AccountNotFound.class);
+        assertThatThrownBy(() -> getStatement.statement(unknown, StatementFilter.unbounded(),
+                StatementSpec.firstPage(1)))
+                .isInstanceOf(AccountNotFound.class);
     }
 
     /** A balanced two-leg command on accounts that do not exist — valid past every pure check. */

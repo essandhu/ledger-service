@@ -26,4 +26,18 @@ public enum AccountType {
             case LIABILITY, EQUITY, INCOME -> -1;
         };
     }
+
+    /**
+     * THE natural-balance formula, in one place (M3 dedup — it was inlined at three call
+     * sites): {@code natural = raw × direction} (PLAN §4.2), CHECKED. Direction is ±1, so the
+     * product is exact for every representable value bar the two's-complement edge: raw
+     * {@code Long.MIN_VALUE} on a credit-normal type has no 64-bit natural, and a plain
+     * {@code *} would silently return {@code Long.MIN_VALUE} again — a NEGATIVE verdict for
+     * an astronomically positive position. The raw {@link ArithmeticException} deliberately
+     * propagates; translating it into the client-facing {@code AmountOverflow} is the
+     * accumulation points' job (the contract {@link Money} pins for checked arithmetic).
+     */
+    public long natural(long raw) {
+        return Math.multiplyExact(raw, direction());
+    }
 }

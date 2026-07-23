@@ -47,6 +47,6 @@ public record AccountBalance(
      */
     public long natural(AccountType type) {
         Objects.requireNonNull(type, "type");
-        return Math.multiplyExact(balance, type.direction());
+        return type.natural(balance);
     }
 }

@@ -188,9 +188,28 @@ class AuthzMatrixIntegrationTest {
                 new Cell("HEAD", "ENTRY", NO_ROLES, 403),
                 new Cell("HEAD", "ENTRY", "LEDGER_READ", 200),
 
-                // The entry collection GET is M3 — until then the namespace backstop holds it,
-                // even for the right-role-to-be.
+                // PLAN §5 defines no journal-entries collection endpoint (statements are read
+                // per account) — the namespace backstop holds it, even for LEDGER_READ.
                 new Cell("GET", "/api/v1/journal-entries", "LEDGER_READ", 403),
+
+                // ── M3 balance & statement reads (PLAN §5): LEDGER_READ only — the extra
+                // path segment means the /accounts/* matchers do NOT cover these; each has
+                // its own explicit GET and HEAD rules, and this is the proof they exist.
+                new Cell("GET", "BALANCE", NONE, 401),
+                new Cell("GET", "BALANCE", NO_ROLES, 403),
+                new Cell("GET", "BALANCE", "LEDGER_READ", 200),
+                new Cell("GET", "BALANCE", "LEDGER_WRITE", 403),
+                new Cell("GET", "BALANCE", "LEDGER_ADMIN", 403),
+                new Cell("HEAD", "BALANCE", NO_ROLES, 403),
+                new Cell("HEAD", "BALANCE", "LEDGER_READ", 200),
+
+                new Cell("GET", "POSTINGS", NONE, 401),
+                new Cell("GET", "POSTINGS", NO_ROLES, 403),
+                new Cell("GET", "POSTINGS", "LEDGER_READ", 200),
+                new Cell("GET", "POSTINGS", "LEDGER_WRITE", 403),
+                new Cell("GET", "POSTINGS", "LEDGER_ADMIN", 403),
+                new Cell("HEAD", "POSTINGS", NO_ROLES, 403),
+                new Cell("HEAD", "POSTINGS", "LEDGER_READ", 200),
 
                 // springdoc surfaces: any authenticated principal, no role required
                 new Cell("GET", "/v3/api-docs", NONE, 401),
@@ -214,6 +233,8 @@ class AuthzMatrixIntegrationTest {
             case "EXISTING" -> "/api/v1/accounts/" + existingId;
             case "ENTRY" -> "/api/v1/journal-entries/" + entryId;
             case "ENTRY_REVERSAL" -> "/api/v1/journal-entries/" + entryId + "/reversal";
+            case "BALANCE" -> "/api/v1/accounts/" + existingId + "/balance";
+            case "POSTINGS" -> "/api/v1/accounts/" + existingId + "/postings";
             default -> cell.uri();
         };
         var request = switch (cell.method()) {
@@ -253,6 +274,15 @@ class AuthzMatrixIntegrationTest {
                 .hasStatus(HttpStatus.FORBIDDEN);
         assertThat(mvc.patch().uri(unknown).contentType(MediaType.APPLICATION_JSON).content("{}")
                 .with(principal("LEDGER_ADMIN"))) // right role
+                .hasStatus(HttpStatus.NOT_FOUND);
+        // M3 reads follow the same precedence.
+        assertThat(mvc.get().uri(unknown + "/balance").with(principal("LEDGER_WRITE")))
+                .hasStatus(HttpStatus.FORBIDDEN);
+        assertThat(mvc.get().uri(unknown + "/balance").with(principal("LEDGER_READ")))
+                .hasStatus(HttpStatus.NOT_FOUND);
+        assertThat(mvc.get().uri(unknown + "/postings").with(principal("LEDGER_WRITE")))
+                .hasStatus(HttpStatus.FORBIDDEN);
+        assertThat(mvc.get().uri(unknown + "/postings").with(principal("LEDGER_READ")))
                 .hasStatus(HttpStatus.NOT_FOUND);
     }
 }

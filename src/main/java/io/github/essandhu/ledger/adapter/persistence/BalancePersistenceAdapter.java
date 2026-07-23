@@ -2,6 +2,7 @@ package io.github.essandhu.ledger.adapter.persistence;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import io.micrometer.core.instrument.MeterRegistry;
@@ -62,6 +63,13 @@ class BalancePersistenceAdapter implements BalanceRepository {
         // Query order is canonical order (the ORDER BY); missing ids are simply absent rows,
         // which the caller reads as "this account does not exist" (port contract).
         return locked.stream().map(AccountBalanceJpaEntity::toDomain).toList();
+    }
+
+    @Override
+    public Optional<AccountBalance> findCurrent(AccountId accountId) {
+        // Plain primary-key point SELECT — deliberately NOT lockAllInCanonicalOrder: reads
+        // never join the lock queue, so ADR-0003's single lock site stays lockBalances.
+        return repository.findById(accountId.value()).map(AccountBalanceJpaEntity::toDomain);
     }
 
     @Override

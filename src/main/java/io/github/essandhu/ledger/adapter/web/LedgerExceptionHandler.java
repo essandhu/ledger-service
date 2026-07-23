@@ -213,6 +213,21 @@ class LedgerExceptionHandler extends ResponseEntityExceptionHandler {
         return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, exception.getMessage());
     }
 
+    @ExceptionHandler(InvalidQueryInstant.class)
+    ProblemDetail invalidQueryInstant(InvalidQueryInstant exception) {
+        // M3 read params: parseable in java.time, unbindable as timestamptz — the 400 family
+        // (never a 500 from the bind), same bare-problem posture as every shape violation.
+        return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, exception.getMessage());
+    }
+
+    @ExceptionHandler(InvalidCursor.class)
+    ProblemDetail invalidCursor(InvalidCursor exception) {
+        // M3 statement cursor: not a token we issued (or not for this account) — a shape
+        // violation like any malformed query param, so bare 400, no ProblemTypes slug (typed
+        // slugs are the business-rule vocabulary; the class javadoc pins the split).
+        return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, exception.getMessage());
+    }
+
     @ExceptionHandler(InvalidEntryInput.class)
     ProblemDetail invalidEntryInput(InvalidEntryInput exception) {
         // The posting-side sibling of invalidAccountInput: normally shadowed by bean validation

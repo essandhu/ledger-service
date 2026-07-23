@@ -3,6 +3,8 @@ package io.github.essandhu.ledger.application.port.out;
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 
 import io.github.essandhu.ledger.domain.model.AccountBalance;
 import io.github.essandhu.ledger.domain.model.AccountId;
@@ -20,15 +22,25 @@ import io.github.essandhu.ledger.domain.model.AccountId;
 public interface BalanceRepository {
 
     /**
-     * The canonical lock order (ADR-0003): account UUIDs ascending BYTEWISE — unsigned
-     * comparison of both halves, matching PostgreSQL's uuid ordering, so the order this layer
-     * sorts by and the order the adapter's {@code ORDER BY account_id … FOR UPDATE} locks by
-     * are the same total order. Deliberately NOT {@link java.util.UUID#compareTo}, which
-     * compares signed longs and disagrees with the database on any id whose first bit is set.
+     * PostgreSQL's uuid order: ascending BYTEWISE — unsigned comparison of both halves.
+     * Deliberately NOT {@link java.util.UUID#compareTo}, which compares signed longs and
+     * disagrees with the database on any id whose first bit is set. The ONE Java-side
+     * definition of the database's uuid order: the canonical lock order below derives from
+     * it, and so must any other mirror of a database uuid ordering (e.g. the statement
+     * keyset's id tiebreak in test fakes) — two hand-rolled copies of this trick would be
+     * two chances for one of them to drift back to signed comparison.
      */
-    Comparator<AccountId> CANONICAL_ORDER = Comparator
-            .comparing((AccountId id) -> id.value().getMostSignificantBits(), Long::compareUnsigned)
-            .thenComparing(id -> id.value().getLeastSignificantBits(), Long::compareUnsigned);
+    Comparator<UUID> UUID_BYTEWISE_ORDER = Comparator
+            .comparing(UUID::getMostSignificantBits, Long::compareUnsigned)
+            .thenComparing(UUID::getLeastSignificantBits, Long::compareUnsigned);
+
+    /**
+     * The canonical lock order (ADR-0003): account UUIDs in {@link #UUID_BYTEWISE_ORDER}, so
+     * the order this layer sorts by and the order the adapter's {@code ORDER BY account_id …
+     * FOR UPDATE} locks by are the same total order.
+     */
+    Comparator<AccountId> CANONICAL_ORDER =
+            Comparator.comparing(AccountId::value, UUID_BYTEWISE_ORDER);
 
     /**
      * {@code SELECT … FOR UPDATE} over the snapshot rows of every given account, blocking
@@ -43,10 +55,24 @@ public interface BalanceRepository {
     List<AccountBalance> lockBalances(List<AccountId> idsInCanonicalOrder);
 
     /**
+     * Lock-free point read of the current snapshot row — PLAN §5's O(1) balance endpoint
+     * (M3). Deliberately NOT {@link #lockBalances}: this read takes NO lock, so the
+     * single-lock-site property above stays intact and a read-only query never queues behind
+     * (or ahead of) the posting path. Empty means "no such account" — every real account has
+     * a snapshot row by construction, same contract as {@link #lockBalances}.
+     */
+    Optional<AccountBalance> findCurrent(AccountId accountId);
+
+    /**
      * ADR-0002's literal statement — {@code UPDATE account_balance SET balance = balance +
      * :delta, posting_count = posting_count + :legs, updated_at = :now WHERE account_id = :id}
      * — never an entity-managed read-modify-write. Called only while holding the row's lock
      * via {@link #lockBalances}, in the same transaction that inserts the entry (ADR-0002).
+     *
+     * <p>DECLARED INVARIANT (relied on by the PLAN §4.6 posted_at clamp): callers pass the
+     * entry's {@code posted_at} as {@code now}, so after any applyDelta the row's
+     * {@code updated_at} IS the account's last posted_at whenever {@code posting_count > 0}
+     * — which is exactly the floor the posting engine clamps against under the lock.
      */
     void applyDelta(AccountId accountId, long delta, long legCount, Instant now);
 

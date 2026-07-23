@@ -13,3 +13,6 @@ build/
 # Local planning documents — the public docs are README.md and docs/adr/.
 docs/PLAN.md
 docs/TEST-STRATEGY.md
+
+# Smoke-probe artifact (CI writes it in the runner workspace only)
+app.log

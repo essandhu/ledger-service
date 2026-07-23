@@ -30,14 +30,14 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
  * defaults, and the artifact ships as generated.
  */
 @LedgerIntegrationTest
-@DisplayName("OpenAPI: the spec describes the M1+M2 surface and becomes the CI artifact")
+@DisplayName("OpenAPI: the spec describes the M1+M2+M3 surface and becomes the CI artifact")
 class OpenApiDocumentationTest {
 
     @Autowired
     private MockMvcTester mvc;
 
     @Test
-    @DisplayName("/v3/api-docs covers the account and posting operations, secured with bearer JWT")
+    @DisplayName("/v3/api-docs covers the account, posting, and balance operations, secured with bearer JWT")
     void api_docs_cover_the_account_surface_and_are_written_for_ci() throws Exception {
         MvcTestResult result = mvc.get().uri("/v3/api-docs").with(jwt()).exchange();
         assertThat(result).hasStatusOk();
@@ -58,6 +58,14 @@ class OpenApiDocumentationTest {
         assertThat(reversal).containsKeys("post");
         Map<String, Object> transfers = JsonPath.read(spec, "$.paths['/api/v1/transfers']");
         assertThat(transfers).containsKeys("post");
+
+        // M3 balance & statement surface (PLAN §5).
+        Map<String, Object> balance =
+                JsonPath.read(spec, "$.paths['/api/v1/accounts/{id}/balance']");
+        assertThat(balance).containsKeys("get");
+        Map<String, Object> postings =
+                JsonPath.read(spec, "$.paths['/api/v1/accounts/{id}/postings']");
+        assertThat(postings).containsKeys("get");
 
         Map<String, Object> schemes = JsonPath.read(spec, "$.components.securitySchemes");
         assertThat(schemes).containsKey("bearer-jwt");

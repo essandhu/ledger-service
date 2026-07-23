@@ -2,6 +2,7 @@ package io.github.essandhu.ledger.application.service;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -215,13 +216,12 @@ public class PostingService implements PostJournalEntryUseCase, TransferFundsUse
                                 .formatted(balance.accountId().value()));
             }
             if (!account.allowNegative()) {
-                // Natural = raw × direction, CHECKED: at newRaw = Long.MIN_VALUE with
-                // direction −1 the product has no 64-bit representation, and a wrapping *
-                // would misfile the astronomically positive position as an overdraft (see
-                // AccountBalance.natural — the same lone edge negateExact refuses).
+                // AccountType.natural is CHECKED: at newRaw = Long.MIN_VALUE with direction
+                // −1 the product has no 64-bit representation, and a wrapping * would misfile
+                // the astronomically positive position as an overdraft.
                 long newNatural;
                 try {
-                    newNatural = Math.multiplyExact(newRaw, account.type().direction());
+                    newNatural = account.type().natural(newRaw);
                 } catch (ArithmeticException overflow) {
                     throw new AmountOverflow(
                             "account %s natural balance has no 64-bit representation (ADR-0001: checked arithmetic rejects, never wraps)"
@@ -233,10 +233,31 @@ public class PostingService implements PostJournalEntryUseCase, TransferFundsUse
             }
         }
 
-        // Step 6: posted_at read from the injected Clock UNDER the lock (PLAN §4.6 — exact
-        // per-account as-of ordering), ids from the generator port, then the writes: entry
-        // with postings, and ADR-0002's snapshot bump per touched account, same transaction.
+        // Step 6: posted_at read from the injected Clock UNDER the lock, then clamped
+        // strictly above every touched account's last posted_at (PLAN §4.6): per-account
+        // posted_at order equals commit order BY CONSTRUCTION, not by trusting the wall
+        // clock. A backwards step (NTP correction, VM resume — the threat MonotoneUuidClock
+        // already guards ids against) would otherwise let a later-committed posting sort
+        // before an earlier one, permanently skipping it past M3's keyset cursors and letting
+        // as-of sums select a never-committed subset. The floor is the LOCKED snapshot row's
+        // updated_at — which IS the account's last posted_at whenever posting_count > 0
+        // (applyDelta below writes them together) — so the guarantee holds across app
+        // instances, not just within one process. posting_count = 0 means updated_at is
+        // creation time, not posting history: no floor, a first posting may share it.
+        // Deliberate trade (M3 review): ordering and availability over wall-clock accuracy.
+        // After a backwards step, postings keep flowing, stamped ahead of the corrected
+        // clock until real time overtakes the high-water mark — a fast clock mis-stamps
+        // with or without the clamp, and the alternative (refusing to post until the clock
+        // catches up) would turn clock skew into an outage on the money path.
         Instant postedAt = clock.instant();
+        for (AccountBalance balance : locked) {
+            if (balance.postingCount() > 0) {
+                Instant floor = balance.updatedAt().plus(1, ChronoUnit.MICROS);
+                if (floor.isAfter(postedAt)) {
+                    postedAt = floor;
+                }
+            }
+        }
         EntryId entryId = new EntryId(ids.nextId());
         List<PostingId> postingIds = new ArrayList<>(draft.legs().size());
         for (int i = 0; i < draft.legs().size(); i++) {

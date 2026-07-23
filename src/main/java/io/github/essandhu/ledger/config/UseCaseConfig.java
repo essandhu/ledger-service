@@ -13,6 +13,7 @@ import io.github.essandhu.ledger.application.port.out.BalanceRepository;
 import io.github.essandhu.ledger.application.port.out.IdGenerator;
 import io.github.essandhu.ledger.application.port.out.JournalRepository;
 import io.github.essandhu.ledger.application.service.AccountService;
+import io.github.essandhu.ledger.application.service.BalanceService;
 import io.github.essandhu.ledger.application.service.PostingService;
 
 /**
@@ -33,6 +34,12 @@ class UseCaseConfig {
     PostingService postingService(AccountRepository accounts, JournalRepository journal,
             BalanceRepository balances, IdGenerator ids, Clock clock) {
         return new PostingService(accounts, journal, balances, ids, clock);
+    }
+
+    @Bean
+    BalanceService balanceService(AccountRepository accounts, BalanceRepository balances,
+            JournalRepository journal) {
+        return new BalanceService(accounts, balances, journal);
     }
 
     /**

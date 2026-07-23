@@ -44,6 +44,17 @@ class SecurityConfig {
                         .hasRole("LEDGER_READ")
                         .requestMatchers(HttpMethod.HEAD, "/api/v1/accounts", "/api/v1/accounts/*")
                         .hasRole("LEDGER_READ")
+                        // M3 balance/statement reads (PLAN §5): their extra path segment means
+                        // the single-segment /api/v1/accounts/* matchers above do NOT cover
+                        // them — each gets its own explicit GET and HEAD rules.
+                        .requestMatchers(HttpMethod.GET,
+                                "/api/v1/accounts/*/balance",
+                                "/api/v1/accounts/*/postings")
+                        .hasRole("LEDGER_READ")
+                        .requestMatchers(HttpMethod.HEAD,
+                                "/api/v1/accounts/*/balance",
+                                "/api/v1/accounts/*/postings")
+                        .hasRole("LEDGER_READ")
                         // M2 money movers (PLAN §5): one role, LEDGER_WRITE — no hierarchy, so
                         // ADMIN posts nothing and WRITE reads nothing.
                         .requestMatchers(HttpMethod.POST,
@@ -52,8 +63,9 @@ class SecurityConfig {
                                 "/api/v1/transfers")
                         .hasRole("LEDGER_WRITE")
                         // HEAD listed explicitly, same reason as the account matchers above.
-                        // Only the item GET exists — the collection listing is M3, so
-                        // GET /api/v1/journal-entries stays on the backstop below.
+                        // Only the item GET exists — PLAN §5 defines no journal-entries
+                        // collection endpoint, so GET /api/v1/journal-entries stays on the
+                        // backstop below (statements are read per account, M3).
                         .requestMatchers(HttpMethod.GET, "/api/v1/journal-entries/*")
                         .hasRole("LEDGER_READ")
                         .requestMatchers(HttpMethod.HEAD, "/api/v1/journal-entries/*")

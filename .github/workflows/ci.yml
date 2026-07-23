@@ -268,22 +268,84 @@ jobs:
           fi
           echo "immutability demo OK — UPDATE posting as ledger_app: permission denied (I3)"
 
-          # Balance truth lives in the database until M3's endpoints arrive: read the ADR-0002
-          # snapshot rows as the runtime role. Exactly ±12345 with one posting each — the
-          # rejected probes above must have left no residue (I4).
-          src_row=$(docker compose exec -T postgres psql -U ledger_app -d ledger -tA \
-            -c "SELECT balance, posting_count FROM account_balance WHERE account_id = '$src_id'")
-          if [ "$src_row" != "12345|1" ]; then
-            echo "source snapshot expected balance|posting_count = 12345|1, got: $src_row"
+          # --- M3 demo (PLAN §9): balance truth now HAS an HTTP surface — the ADR-0002
+          # snapshot, an as-of derivation, and the keyset statement, all as the read-only
+          # client. Exactly ±12345 with one posting each — the rejected probes above must
+          # have left no residue (I4, now asserted over HTTP instead of psql).
+          bal=$(curl -s -w '\n%{http_code}' -H "Authorization: Bearer $ro_token" \
+            "http://localhost:8080/api/v1/accounts/$src_id/balance")
+          code=$(tail -n 1 <<< "$bal")
+          body=$(head -n -1 <<< "$bal")
+          if [ "$code" != "200" ]; then
+            echo "source balance expected 200, got $code; response: $body"
             exit 1
           fi
-          tgt_row=$(docker compose exec -T postgres psql -U ledger_app -d ledger -tA \
-            -c "SELECT balance, posting_count FROM account_balance WHERE account_id = '$tgt_id'")
-          if [ "$tgt_row" != "-12345|1" ]; then
-            echo "target snapshot expected balance|posting_count = -12345|1, got: $tgt_row"
+          # Debited LIABILITY (PLAN §4.2): raw +12345, natural −12345, one posting, and asOf
+          # ABSENT — the live snapshot omits the field (pinned at M3).
+          summary=$(jq -r '[.rawBalance.amount, .balance.amount, .postingCount, has("asOf")] | join("|")' <<< "$body")
+          if [ "$summary" != "12345|-12345|1|false" ]; then
+            echo "source balance expected raw|natural|count|hasAsOf = 12345|-12345|1|false, got: $summary"
             exit 1
           fi
-          echo "balance demo OK — snapshots read +12345|1 and -12345|1 as ledger_app (I4)"
+          tgt_bal=$(curl -s -H "Authorization: Bearer $ro_token" \
+            "http://localhost:8080/api/v1/accounts/$tgt_id/balance")
+          summary=$(jq -r '[.rawBalance.amount, .balance.amount, .postingCount] | join("|")' <<< "$tgt_bal")
+          if [ "$summary" != "-12345|12345|1" ]; then
+            echo "target balance expected raw|natural|count = -12345|12345|1, got: $summary"
+            exit 1
+          fi
+          echo "balance demo OK — snapshots read ±12345|1 over HTTP, natural flips the LIABILITY sign (ADR-0002, PLAN §4.2)"
+
+          # As-of (I10): at the entry's own posted_at the cut is inclusive; at 1970 it is empty.
+          posted_at=$(jq -r '.postedAt // empty' <<< "$entry")
+          if [ -z "$posted_at" ]; then
+            echo "entry read-back carries no postedAt; response: $entry"
+            exit 1
+          fi
+          asof=$(curl -s -H "Authorization: Bearer $ro_token" \
+            "http://localhost:8080/api/v1/accounts/$src_id/balance?at=$posted_at")
+          summary=$(jq -r '[.rawBalance.amount, .postingCount, .asOf] | join("|")' <<< "$asof")
+          if [ "$summary" != "12345|1|$posted_at" ]; then
+            echo "as-of at posted_at expected 12345|1|$posted_at, got: $summary"
+            exit 1
+          fi
+          early=$(curl -s -H "Authorization: Bearer $ro_token" \
+            "http://localhost:8080/api/v1/accounts/$src_id/balance?at=1970-01-01T00:00:00Z")
+          summary=$(jq -r '[.rawBalance.amount, .postingCount] | join("|")' <<< "$early")
+          if [ "$summary" != "0|0" ]; then
+            echo "as-of at 1970 expected 0|0, got: $summary"
+            exit 1
+          fi
+          echo "as-of demo OK — inclusive cut at posted_at, empty prefix at 1970 (I10)"
+
+          # Statement (PLAN §5): one +12345 line linking back to the entry; the caught-up page
+          # echoes the cursor (stateless tail-follow); a foreign cursor is a loud 400.
+          page=$(curl -s -H "Authorization: Bearer $ro_token" \
+            "http://localhost:8080/api/v1/accounts/$src_id/postings?limit=10")
+          summary=$(jq -r '[(.content | length), .content[0].amount.amount, .content[0].entryId] | join("|")' <<< "$page")
+          if [ "$summary" != "1|12345|$entry_id" ]; then
+            echo "statement expected 1|12345|$entry_id, got: $summary"
+            exit 1
+          fi
+          cursor=$(jq -r '.nextCursor // empty' <<< "$page")
+          if [ -z "$cursor" ]; then
+            echo "statement page carries no nextCursor; response: $page"
+            exit 1
+          fi
+          page2=$(curl -s -H "Authorization: Bearer $ro_token" \
+            "http://localhost:8080/api/v1/accounts/$src_id/postings?cursor=$cursor")
+          summary=$(jq -r '[(.content | length), .nextCursor] | join("|")' <<< "$page2")
+          if [ "$summary" != "0|$cursor" ]; then
+            echo "caught-up page expected 0|$cursor, got: $summary"
+            exit 1
+          fi
+          code=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $ro_token" \
+            "http://localhost:8080/api/v1/accounts/$tgt_id/postings?cursor=$cursor")
+          if [ "$code" != "400" ]; then
+            echo "foreign cursor expected 400, got $code"
+            exit 1
+          fi
+          echo "statement demo OK — keyset page, echoed cursor when caught up, foreign cursor 400 (M3)"
 
           docker compose logs --no-color app > app.log
           grep -q "Started LedgerApplication" app.log
