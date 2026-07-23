@@ -31,6 +31,7 @@ import io.github.essandhu.ledger.domain.model.EntryDraft;
 import io.github.essandhu.ledger.domain.model.Money;
 import io.github.essandhu.ledger.support.LedgerIntegrationTest;
 import io.github.essandhu.ledger.support.property.Gen;
+import io.github.essandhu.ledger.support.property.Iterations;
 import io.github.essandhu.ledger.support.property.Property;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -97,32 +98,13 @@ class PostingConservationPropertyIntegrationTest {
         List<AccountId> allAccounts = pools.values().stream().flatMap(List::stream).toList();
 
         Gen<List<List<EntryDraft.Leg>>> batches = balancedLegsOver(pools).listOf(1, 3);
-        withReducedIterations(() -> Property.check(batches, batch -> {
+        Iterations.withReducedDefault(REDUCED_ITERATIONS, () -> Property.check(batches, batch -> {
             for (List<EntryDraft.Leg> legs : batch) {
                 postEntry.postEntry(new PostEntryCommand("prop-conservation", legs, CREATED_BY));
             }
             assertI4(allAccounts);
             assertI5(allAccounts);
         }));
-    }
-
-    /**
-     * An explicit {@code -Dledger.property.iterations} always wins — the knob must keep
-     * meaning what it says (Property fails loudly on malformed values for the same reason);
-     * only the DEFAULT is reduced here. Restored in a finally so the pure-domain property
-     * suites sharing this JVM keep their 200.
-     */
-    private static void withReducedIterations(Runnable check) {
-        if (System.getProperty(Property.ITERATIONS_PROPERTY) != null) {
-            check.run();
-            return;
-        }
-        System.setProperty(Property.ITERATIONS_PROPERTY, REDUCED_ITERATIONS);
-        try {
-            check.run();
-        } finally {
-            System.clearProperty(Property.ITERATIONS_PROPERTY);
-        }
     }
 
     /** Three allow-negative accounts per currency, types cycled — JPY (exponent 0) and BHD

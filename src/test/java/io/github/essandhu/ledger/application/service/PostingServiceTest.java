@@ -3,6 +3,7 @@ package io.github.essandhu.ledger.application.service;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
 
@@ -340,6 +341,66 @@ class PostingServiceTest {
         assertThat(entry.postings()).extracting(Posting::postedAt).containsOnly(T0);
         assertThat(balances.appliedDeltas())
                 .extracting(FakeBalanceRepository.AppliedDelta::now).containsOnly(T0);
+    }
+
+    @Test
+    @DisplayName("PLAN §4.6: posted_at is clamped strictly above a touched account's last posted_at — a backwards wall clock cannot reorder an account's postings")
+    void posted_at_never_regresses_behind_a_touched_accounts_last_posting() {
+        AccountId cash = seeded(LOW, AccountType.ASSET, false, EUR, 0);
+        AccountId equity = seeded(MID, AccountType.EQUITY, false, EUR, 0);
+        // The account already has posting history "in the future" of the wall clock: its last
+        // posting landed 5µs after T0, but the clock now reads T0 (an NTP step back — the same
+        // threat MonotoneUuidClock guards ids against). Without the clamp this entry would
+        // sort BEFORE the earlier one, and an M3 keyset cursor past it would skip it forever.
+        Instant lastPostedAt = T0.plus(5, ChronoUnit.MICROS);
+        balances.seed(new AccountBalance(cash, 0, 3, lastPostedAt));
+
+        JournalEntry entry = service().postEntry(entryOf(leg(cash, 100), leg(equity, -100)));
+
+        Instant clamped = lastPostedAt.plus(1, ChronoUnit.MICROS);
+        assertThat(entry.postedAt()).isEqualTo(clamped);
+        assertThat(entry.postings()).extracting(Posting::postedAt).containsOnly(clamped);
+        assertThat(balances.appliedDeltas())
+                .extracting(FakeBalanceRepository.AppliedDelta::now).containsOnly(clamped);
+    }
+
+    @Test
+    @DisplayName("PLAN §4.6: the posted_at clamp takes the strictest floor across ALL touched accounts")
+    void posted_at_clamp_takes_the_max_across_touched_accounts() {
+        AccountId cash = seeded(LOW, AccountType.ASSET, false, EUR, 0);
+        AccountId equity = seeded(MID, AccountType.EQUITY, false, EUR, 0);
+        balances.seed(new AccountBalance(cash, 0, 1, T0.plus(2, ChronoUnit.MICROS)));
+        balances.seed(new AccountBalance(equity, 0, 1, T0.plus(7, ChronoUnit.MICROS)));
+
+        JournalEntry entry = service().postEntry(entryOf(leg(cash, 100), leg(equity, -100)));
+
+        assertThat(entry.postedAt()).isEqualTo(T0.plus(8, ChronoUnit.MICROS));
+    }
+
+    @Test
+    @DisplayName("PLAN §4.6: when the wall clock is already ahead of every floor, posted_at is the clock reading")
+    void posted_at_uses_the_clock_when_ahead_of_all_floors() {
+        AccountId cash = seeded(LOW, AccountType.ASSET, false, EUR, 0);
+        AccountId equity = seeded(MID, AccountType.EQUITY, false, EUR, 0);
+        balances.seed(new AccountBalance(cash, 0, 4, T0.minus(3, ChronoUnit.MICROS)));
+
+        JournalEntry entry = service().postEntry(entryOf(leg(cash, 100), leg(equity, -100)));
+
+        assertThat(entry.postedAt()).isEqualTo(T0);
+    }
+
+    @Test
+    @DisplayName("PLAN §4.6: an account's FIRST posting is not clamped — updated_at is creation time then, not posting history")
+    void first_posting_is_not_clamped_by_account_creation_time() {
+        // Fresh seeds carry posting_count = 0 with updated_at = creation time. The floor
+        // exists to order postings among THEMSELVES (keyset/as-of correctness); a posting at
+        // the account's creation instant is harmless, so no bump on first use.
+        AccountId cash = seeded(LOW, AccountType.ASSET, false, EUR, 0);
+        AccountId equity = seeded(MID, AccountType.EQUITY, false, EUR, 0);
+
+        JournalEntry entry = service().postEntry(entryOf(leg(cash, 100), leg(equity, -100)));
+
+        assertThat(entry.postedAt()).isEqualTo(T0);
     }
 
     @Test

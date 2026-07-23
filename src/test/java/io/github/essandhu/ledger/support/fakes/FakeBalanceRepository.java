@@ -49,6 +49,13 @@ public final class FakeBalanceRepository implements BalanceRepository {
     }
 
     @Override
+    public Optional<AccountBalance> findCurrent(AccountId accountId) {
+        // Lock-free by contract (no invocation recorded in lockInvocations — the M3 balance
+        // read must never appear in a lock-order assertion).
+        return Optional.ofNullable(rows.get(accountId));
+    }
+
+    @Override
     public void applyDelta(AccountId accountId, long delta, long legCount, Instant now) {
         AccountBalance current = rows.get(accountId);
         if (current == null) {

@@ -1,12 +1,18 @@
 package io.github.essandhu.ledger.adapter.persistence;
 
+import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
 import org.springframework.stereotype.Component;
 
+import io.github.essandhu.ledger.application.port.in.StatementCursor;
+import io.github.essandhu.ledger.application.port.in.StatementFilter;
 import io.github.essandhu.ledger.application.port.out.JournalRepository;
+import io.github.essandhu.ledger.domain.model.AccountId;
 import io.github.essandhu.ledger.domain.model.EntryId;
 import io.github.essandhu.ledger.domain.model.JournalEntry;
+import io.github.essandhu.ledger.domain.model.Posting;
 
 /**
  * JPA implementation of the {@link JournalRepository} port. Insert-only by construction: the
@@ -49,5 +55,26 @@ class JournalPersistenceAdapter implements JournalRepository {
     @Override
     public boolean reversalExistsFor(EntryId originalId) {
         return entries.existsByReversalOf(originalId.value());
+    }
+
+    @Override
+    public PostingAggregate sumPostingsAsOf(AccountId accountId, Instant at) {
+        PostingJpaRepository.AsOfAggregateRow row =
+                postings.sumPostingsAsOf(accountId.value(), at);
+        return new PostingAggregate(row.getSum(), row.getCount());
+    }
+
+    @Override
+    public List<Posting> statementLines(AccountId accountId, StatementFilter filter,
+            Optional<StatementCursor> after, int limit) {
+        // Two queries on the cursor axis (present/absent — the row-value predicate cannot be
+        // COALESCEd away); the window bounds stay nullable params widened in the SQL itself.
+        Instant from = filter.fromExclusive().orElse(null);
+        Instant to = filter.toInclusive().orElse(null);
+        List<PostingJpaEntity> rows = after
+                .map(cursor -> postings.statementAfterCursor(accountId.value(), from, to,
+                        cursor.postedAt(), cursor.id().value(), limit))
+                .orElseGet(() -> postings.statementFirstPage(accountId.value(), from, to, limit));
+        return rows.stream().map(PostingJpaEntity::toDomain).toList();
     }
 }
