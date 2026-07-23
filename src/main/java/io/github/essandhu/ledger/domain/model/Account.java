@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.Objects;
 
 import io.github.essandhu.ledger.domain.error.AccountClosed;
+import io.github.essandhu.ledger.domain.error.AccountFrozen;
 import io.github.essandhu.ledger.domain.error.InvalidAccountInput;
 import io.github.essandhu.ledger.domain.error.InvalidStatusTransition;
 
@@ -13,10 +14,11 @@ import io.github.essandhu.ledger.domain.error.InvalidStatusTransition;
  * identity to decide whether anything needs persisting (no phantom writes, no version bumps on
  * declarative no-ops).
  *
- * <p>I12, lifecycle half (M1): edge legality is enforced here. The other close precondition —
- * natural balance must be zero — is the posting half and lands in M2 as a separate domain rule
- * the use case evaluates while holding the account_balance lock (PLAN §4.5); this type's
- * signatures do not change for it.
+ * <p>I12, lifecycle half (M1): edge legality is enforced here, and since M2 so is the posting
+ * half's status gate ({@link #ensureAcceptsPostings()}). The other close precondition — natural
+ * balance must be zero — is {@link CloseBalanceRule}, a separate domain rule the use case
+ * evaluates while holding the account_balance lock (PLAN §4.5); this type's signatures did not
+ * change for it, exactly as the M1 forward-contract promised.
  *
  * <p>Optimistic-lock bookkeeping (the {@code version} column) is deliberately absent: it is
  * persistence infrastructure owned by the JPA adapter, not a domain concept.
@@ -77,6 +79,26 @@ public record Account(
             throw new AccountClosed("account %s is closed; closed accounts reject edits".formatted(id.value()));
         }
         return new Account(id, newName, currency, type, status, allowNegative, createdAt, now);
+    }
+
+    /**
+     * I12, posting half (M2): only ACTIVE accounts accept postings (PLAN §4.5). FROZEN rejects
+     * them in both directions but reversibly ({@link AccountFrozen}); CLOSED rejects them
+     * terminally ({@link AccountClosed}) — PLAN §5 files both under the same 422 family as the
+     * M1 metadata rejections. The posting use case calls this AFTER taking the account_balance
+     * lock, on a fresh post-lock read (ADR-0003: the only status read, so there is no
+     * stale-status window for a concurrent freeze or close to slip through).
+     */
+    public void ensureAcceptsPostings() {
+        if (status == AccountStatus.FROZEN) {
+            throw new AccountFrozen(
+                    "account %s is frozen; frozen accounts reject postings in both directions"
+                            .formatted(id.value()));
+        }
+        if (status == AccountStatus.CLOSED) {
+            throw new AccountClosed(
+                    "account %s is closed; closed accounts reject postings".formatted(id.value()));
+        }
     }
 
     private static void requireValidName(String name) {

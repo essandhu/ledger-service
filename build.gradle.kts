@@ -57,6 +57,14 @@ tasks.test {
     // Declared as a task output so build-cache hits restore it — otherwise a FROM-CACHE test
     // task on an unchanged-input CI run would upload nothing and fail the openapi artifact step.
     outputs.file(layout.buildDirectory.file("openapi/openapi.json"))
+    // Property-harness replay contract (ADR-0005, TEST-STRATEGY §2.2): `Property` reads these at
+    // check time inside the forked test JVM, so the CLI promises `-Dledger.property.seed=<long>`
+    // (replay a falsified run) and `-Dledger.property.iterations=<n>` (raise the budget) only work
+    // if Gradle forwards them. Forwarded only when set, so the task's inputs — and its cacheability —
+    // are unchanged for ordinary runs.
+    listOf("ledger.property.seed", "ledger.property.iterations").forEach { key ->
+        providers.systemProperty(key).orNull?.let { value -> systemProperty(key, value) }
+    }
     finalizedBy(tasks.jacocoTestReport)
 }
 
@@ -77,8 +85,8 @@ tasks.jacocoTestCoverageVerification {
             limit {
                 counter = "LINE"
                 value = "COVEREDRATIO"
-                // Coverage ratchet (TEST-STRATEGY.md §5): M1 → 0.70, M2 → 0.80, M4 → 0.85, M7 → 0.90.
-                minimum = "0.70".toBigDecimal()
+                // Coverage ratchet (TEST-STRATEGY.md §5): M1 → 0.70, M2 → 0.80 (current), M4 → 0.85, M7 → 0.90.
+                minimum = "0.80".toBigDecimal()
             }
         }
     }

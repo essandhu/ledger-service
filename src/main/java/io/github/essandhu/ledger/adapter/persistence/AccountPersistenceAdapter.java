@@ -1,5 +1,7 @@
 package io.github.essandhu.ledger.adapter.persistence;
 
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.domain.Page;
@@ -49,6 +51,15 @@ class AccountPersistenceAdapter implements AccountRepository {
     @Override
     public Optional<Account> findById(AccountId id) {
         return repository.findById(id.value()).map(AccountJpaEntity::toDomain);
+    }
+
+    @Override
+    public List<Account> findByIds(Collection<AccountId> ids) {
+        // The port promises no order and silently omits missing ids — the posting engine
+        // already resolved existence from the balance-lock result (ADR-0003) before calling.
+        return repository.findAllById(ids.stream().map(AccountId::value).toList()).stream()
+                .map(AccountJpaEntity::toDomain)
+                .toList();
     }
 
     @Override

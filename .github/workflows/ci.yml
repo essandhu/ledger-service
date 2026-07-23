@@ -144,6 +144,147 @@ jobs:
           fi
           echo "role matrix demo OK — LEDGER_READ token: GET 200, POST 403"
 
+          # --- M2 demo (PLAN §9): post a transfer, watch the rejection reasons, try to rewrite history ---
+          # Two LIABILITY accounts (customer money is what the ledger owes): PLAN §5 pins the
+          # signs — a transfer debits the source (+amount raw, natural balance falls) and credits
+          # the target (−amount raw, natural rises). The source may go negative; the target may
+          # not, which arms the overdraft probe below. Role note: ledger-cli's service account
+          # carries ADMIN+WRITE+READ (the realm ships no write-only client), so $token plays
+          # both the account-admin and the transfer-writer; $ro_token stays the reader.
+          src=$(curl -s -X POST -H "Authorization: Bearer $token" \
+            -H 'Content-Type: application/json' \
+            -d '{"name": "m2-smoke-source", "currency": "EUR", "type": "LIABILITY", "allowNegative": true}' \
+            http://localhost:8080/api/v1/accounts)
+          src_id=$(jq -r '.id // empty' <<< "$src")
+          if [ -z "$src_id" ]; then
+            echo "source account create failed; response: $src"
+            exit 1
+          fi
+          tgt=$(curl -s -X POST -H "Authorization: Bearer $token" \
+            -H 'Content-Type: application/json' \
+            -d '{"name": "m2-smoke-target", "currency": "EUR", "type": "LIABILITY", "allowNegative": false}' \
+            http://localhost:8080/api/v1/accounts)
+          tgt_id=$(jq -r '.id // empty' <<< "$tgt")
+          if [ -z "$tgt_id" ]; then
+            echo "target account create failed; response: $tgt"
+            exit 1
+          fi
+
+          # -D - interleaves the response headers into the capture, so one request yields the
+          # status (-w, on its own final line), the Location header, and the body (Spring writes
+          # compact JSON: the single {-prefixed line).
+          transfer=$(curl -s -D - -w '\n%{http_code}' -X POST \
+            -H "Authorization: Bearer $token" -H 'Content-Type: application/json' \
+            -d "{\"sourceAccountId\": \"$src_id\", \"targetAccountId\": \"$tgt_id\", \"amount\": {\"amount\": 12345, \"currency\": \"EUR\"}, \"description\": \"M2 smoke transfer\"}" \
+            http://localhost:8080/api/v1/transfers)
+          code=$(tail -n 1 <<< "$transfer")
+          if [ "$code" != "201" ]; then
+            echo "transfer expected 201, got $code; response: $transfer"
+            exit 1
+          fi
+          entry=$(grep '^{' <<< "$transfer")
+          entry_id=$(jq -r '.id // empty' <<< "$entry")
+          if [ -z "$entry_id" ]; then
+            echo "transfer response carries no entry id; response: $entry"
+            exit 1
+          fi
+          if ! grep -qi "^location: /api/v1/journal-entries/$entry_id" <<< "$transfer"; then
+            echo "transfer Location must address the created journal entry; response: $transfer"
+            exit 1
+          fi
+
+          # Read it back as the read-only client: exactly two legs, zero-sum (I1), source
+          # +12345 / target −12345 (debit-positive, PLAN §4.2).
+          entry_read=$(curl -s -w '\n%{http_code}' -H "Authorization: Bearer $ro_token" \
+            "http://localhost:8080/api/v1/journal-entries/$entry_id")
+          code=$(tail -n 1 <<< "$entry_read")
+          entry=$(head -n -1 <<< "$entry_read")
+          if [ "$code" != "200" ]; then
+            echo "read-only GET of the entry expected 200, got $code; response: $entry"
+            exit 1
+          fi
+          legs_ok=$(jq --arg src "$src_id" --arg tgt "$tgt_id" \
+            '(.postings | length) == 2
+             and ([.postings[].amount.amount] | add) == 0
+             and ([.postings[] | select(.accountId == $src).amount.amount] == [12345])
+             and ([.postings[] | select(.accountId == $tgt).amount.amount] == [-12345])' <<< "$entry")
+          if [ "$legs_ok" != "true" ]; then
+            echo "entry legs are not the pinned ±12345 debit-positive pair; response: $entry"
+            exit 1
+          fi
+          echo "transfer demo OK — 201 + Location, READ-token GET shows 2 zero-sum legs (I1)"
+
+          # Every rejection is a 422 whose problem type names the reason — the exact ProblemTypes
+          # URIs, one vocabulary with the ledger.posting.rejected metric tags (PLAN §8). First an
+          # entry that does not balance (I1) ...
+          rejection=$(curl -s -w '\n%{http_code}' -X POST \
+            -H "Authorization: Bearer $token" -H 'Content-Type: application/json' \
+            -d "{\"description\": \"M2 smoke unbalanced\", \"postings\": [
+                  {\"accountId\": \"$src_id\", \"amount\": {\"amount\": 100, \"currency\": \"EUR\"}},
+                  {\"accountId\": \"$tgt_id\", \"amount\": {\"amount\": -60, \"currency\": \"EUR\"}}]}" \
+            http://localhost:8080/api/v1/journal-entries)
+          code=$(tail -n 1 <<< "$rejection")
+          body=$(head -n -1 <<< "$rejection")
+          if [ "$code" != "422" ]; then
+            echo "unbalanced entry expected 422, got $code; response: $body"
+            exit 1
+          fi
+          ptype=$(jq -r '.type // empty' <<< "$body")
+          if [ "$ptype" != "https://essandhu.github.io/ledger/problems/unbalanced-entry" ]; then
+            echo "unbalanced entry expected the unbalanced-entry problem type, got: $ptype; response: $body"
+            exit 1
+          fi
+          # ... then an overdraft (I6): the target now holds 12345 and may not go negative, so
+          # sending 99999 back out of it must be refused with nothing recorded.
+          rejection=$(curl -s -w '\n%{http_code}' -X POST \
+            -H "Authorization: Bearer $token" -H 'Content-Type: application/json' \
+            -d "{\"sourceAccountId\": \"$tgt_id\", \"targetAccountId\": \"$src_id\", \"amount\": {\"amount\": 99999, \"currency\": \"EUR\"}, \"description\": \"M2 smoke overdraft\"}" \
+            http://localhost:8080/api/v1/transfers)
+          code=$(tail -n 1 <<< "$rejection")
+          body=$(head -n -1 <<< "$rejection")
+          if [ "$code" != "422" ]; then
+            echo "overdrafting transfer expected 422, got $code; response: $body"
+            exit 1
+          fi
+          ptype=$(jq -r '.type // empty' <<< "$body")
+          if [ "$ptype" != "https://essandhu.github.io/ledger/problems/overdraft" ]; then
+            echo "overdrafting transfer expected the overdraft problem type, got: $ptype; response: $body"
+            exit 1
+          fi
+          echo "rejection demo OK — unbalanced-entry and overdraft both 422 with pinned problem types"
+
+          # Try to rewrite history at the database (I3): psql as ledger_app — the runtime role,
+          # not superuser — must be refused. The `if` inverts the exit code: this probe passes
+          # only when psql errors; a successful UPDATE is the CI failure. The grep then pins the
+          # failure to a privilege error, so a broken connection cannot masquerade as immutability.
+          if update_out=$(docker compose exec -T postgres psql -U ledger_app -d ledger \
+                -c 'UPDATE posting SET amount = amount + 1' 2>&1); then
+            echo "I3 violated: UPDATE posting as ledger_app succeeded; output: $update_out"
+            exit 1
+          fi
+          if ! grep -q 'permission denied' <<< "$update_out"; then
+            echo "UPDATE posting failed, but not as a privilege error; output: $update_out"
+            exit 1
+          fi
+          echo "immutability demo OK — UPDATE posting as ledger_app: permission denied (I3)"
+
+          # Balance truth lives in the database until M3's endpoints arrive: read the ADR-0002
+          # snapshot rows as the runtime role. Exactly ±12345 with one posting each — the
+          # rejected probes above must have left no residue (I4).
+          src_row=$(docker compose exec -T postgres psql -U ledger_app -d ledger -tA \
+            -c "SELECT balance, posting_count FROM account_balance WHERE account_id = '$src_id'")
+          if [ "$src_row" != "12345|1" ]; then
+            echo "source snapshot expected balance|posting_count = 12345|1, got: $src_row"
+            exit 1
+          fi
+          tgt_row=$(docker compose exec -T postgres psql -U ledger_app -d ledger -tA \
+            -c "SELECT balance, posting_count FROM account_balance WHERE account_id = '$tgt_id'")
+          if [ "$tgt_row" != "-12345|1" ]; then
+            echo "target snapshot expected balance|posting_count = -12345|1, got: $tgt_row"
+            exit 1
+          fi
+          echo "balance demo OK — snapshots read +12345|1 and -12345|1 as ledger_app (I4)"
+
           docker compose logs --no-color app > app.log
           grep -q "Started LedgerApplication" app.log
       - name: Dump logs on failure
