@@ -49,7 +49,11 @@ dependencies {
 }
 
 tasks.test {
-    useJUnitPlatform()
+    useJUnitPlatform {
+        // M5 (TEST-STRATEGY §2): the concurrency suite is the first slow suite to need
+        // isolation, so it leaves the default lane for its own tag-filtered task below.
+        excludeTags("concurrency")
+    }
     // The OpenAPI CI artifact is written by OpenApiDocumentationTest to this Gradle-owned path,
     // so the test makes no working-directory assumption (and IDE runs behave identically).
     systemProperty("ledger.openapi.output",
@@ -66,6 +70,51 @@ tasks.test {
         providers.systemProperty(key).orNull?.let { value -> systemProperty(key, value) }
     }
     finalizedBy(tasks.jacocoTestReport)
+}
+
+// M5 (TEST-STRATEGY §2, §4): the parallel-writer proof lane — I6 racy, I7, I8 racy, I17 —
+// tag-filtered out of `test` so the fast deterministic lane stays fast, wired into `check` so
+// a plain `./gradlew build` still proves every invariant (per-milestone definition of done).
+// CI runs it as its own required job in parallel with the default lane (`build -x concurrencyTest`).
+val concurrencyTest by tasks.registering(Test::class) {
+    description = "Runs the M5 concurrency-proof suite (tag: concurrency)."
+    group = "verification"
+    useJUnitPlatform {
+        includeTags("concurrency")
+    }
+    testClassesDirs = sourceSets.test.get().output.classesDirs
+    classpath = sourceSets.test.get().runtimeClasspath
+    // Sizing knobs (TEST-STRATEGY §4: "thread count and iteration count are properties so a
+    // nightly run can crank them") — forwarded into the forked JVM exactly like the property
+    // harness's seed/iterations knobs on `test`, and only when set. The property knobs are
+    // forwarded too: the suite may seed randomized workloads.
+    listOf("ledger.concurrency.threads", "ledger.concurrency.iterations",
+        "ledger.property.seed", "ledger.property.iterations").forEach { key ->
+        providers.systemProperty(key).orNull?.let { value -> systemProperty(key, value) }
+    }
+    // A required proof must actually RUN: every green is a fresh interleaving sample, never a
+    // restored one. Without these, org.gradle.caching=true + the CI cache action could answer
+    // the concurrency job FROM-CACHE on an unchanged-input run — a vacuous green for a lane
+    // whose entire value is nondeterministic re-sampling.
+    outputs.upToDateWhen { false }
+    outputs.doNotCacheIf("the stress lane must re-sample interleavings on every run") { true }
+    // mustRunAfter, not shouldRunAfter: with org.gradle.parallel + the configuration cache,
+    // shouldRunAfter is dropped under parallel scheduling — the two lanes would fork two JVMs
+    // and two PostgreSQL containers SIMULTANEOUSLY on a local `build`, and the stress bounds
+    // (an overrun IS an I17 failure) would compete with the whole default lane for CPU.
+    mustRunAfter(tasks.test)
+    // The stress lane runs with the JaCoCo agent OFF: its coverage is unconsumed by design
+    // (the gate decision below), so instrumentation would only eat into the bounded hammers.
+    configure<JacocoTaskExtension> {
+        isEnabled = false
+    }
+}
+
+tasks.check {
+    // The coverage gate below deliberately stays fed by the default `test` lane alone: the
+    // ratchet measures what the fast deterministic suites prove; the stress lane exists to
+    // break interleavings, not to pad line coverage.
+    dependsOn(concurrencyTest)
 }
 
 jacoco {
