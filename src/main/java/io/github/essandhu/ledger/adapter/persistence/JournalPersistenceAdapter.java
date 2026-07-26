@@ -53,6 +53,17 @@ class JournalPersistenceAdapter implements JournalRepository {
     }
 
     @Override
+    public Optional<JournalEntry> findByCreatorAndKey(String createdBy, String idempotencyKey) {
+        // Served by V3's partial unique backstop index (created_by, idempotency_key) — at
+        // most one row; same reassembly as findById.
+        return entries.findByCreatedByAndIdempotencyKey(createdBy, idempotencyKey)
+                .map(header -> header.toDomain(
+                        postings.findByEntryIdOrderByIdAsc(header.getId()).stream()
+                                .map(PostingJpaEntity::toDomain)
+                                .toList()));
+    }
+
+    @Override
     public boolean reversalExistsFor(EntryId originalId) {
         return entries.existsByReversalOf(originalId.value());
     }

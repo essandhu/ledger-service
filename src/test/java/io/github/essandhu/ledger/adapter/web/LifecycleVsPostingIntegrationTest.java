@@ -108,6 +108,7 @@ class LifecycleVsPostingIntegrationTest {
 
     private MvcTestResult transfer(String subject, String source, String target, long amount) {
         return mvc.post().uri("/api/v1/transfers").with(writer(subject))
+                .header("Idempotency-Key", UUID.randomUUID().toString())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                         {"sourceAccountId": "%s", "targetAccountId": "%s",
@@ -119,6 +120,7 @@ class LifecycleVsPostingIntegrationTest {
     private MvcTestResult postJournal(String subject, String probe, long amountOnProbe,
             String counter, long amountOnCounter) {
         return mvc.post().uri("/api/v1/journal-entries").with(writer(subject))
+                .header("Idempotency-Key", UUID.randomUUID().toString())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                         {"postings": [

@@ -21,9 +21,14 @@ import java.util.Objects;
  * this type has no {@code reversed} flag to mutate.
  *
  * <p>{@code createdBy} is the JWT subject of the caller (PLAN §7) and, from M4 on, one half of
- * the idempotency backstop index (ADR-0004); {@code postedAt} is the single instant the service
- * read from its Clock while holding the account locks (PLAN §4.6), shared by header and every
- * leg.
+ * the idempotency backstop index (ADR-0004); {@code idempotencyKey} is the other half — the
+ * client-supplied key this entry was posted under, kept on the entry forever as the permanent
+ * double-post guard and audit answer to "which request created this". Nullable: pre-M4 rows
+ * (and any future keyless write path) carry none, and V3's backstop index is partial for
+ * exactly that reason. Shape rules for a present key are enforced upstream (the command's
+ * {@code InvalidIdempotencyKey} guard) and at rest (V4 CHECKs) — the domain accepts what those
+ * layers admitted. {@code postedAt} is the single instant the service read from its Clock while
+ * holding the account locks (PLAN §4.6), shared by header and every leg.
  */
 public record JournalEntry(
         EntryId id,
@@ -31,6 +36,7 @@ public record JournalEntry(
         String description,
         EntryId reversalOf,
         String createdBy,
+        String idempotencyKey,
         Instant postedAt,
         List<Posting> postings) {
 
@@ -63,7 +69,8 @@ public record JournalEntry(
      * programming error in the caller's id generation, not a client rejection.
      */
     public static JournalEntry post(EntryId id, EntryType entryType, EntryDraft draft,
-            EntryId reversalOf, String createdBy, Instant postedAt, List<PostingId> postingIds) {
+            EntryId reversalOf, String createdBy, String idempotencyKey, Instant postedAt,
+            List<PostingId> postingIds) {
         Objects.requireNonNull(draft, "draft");
         Objects.requireNonNull(postingIds, "postingIds");
         List<PostingId> ids = List.copyOf(postingIds);
@@ -79,7 +86,7 @@ public record JournalEntry(
             postings.add(new Posting(ids.get(i), id, leg.accountId(), leg.amount(), postedAt));
         }
         return new JournalEntry(id, entryType, draft.description(), reversalOf, createdBy,
-                postedAt, postings);
+                idempotencyKey, postedAt, postings);
     }
 
     /**

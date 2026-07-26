@@ -107,6 +107,7 @@ class ReversalApiIntegrationTest {
     /** A committed 100-EUR transfer between fresh accounts — the standard reversal target. */
     private MvcTestResult transfer(String subject, String source, String target) {
         MvcTestResult result = mvc.post().uri("/api/v1/transfers").with(writer(subject))
+                .header("Idempotency-Key", UUID.randomUUID().toString())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                         {"sourceAccountId": "%s", "targetAccountId": "%s",
@@ -119,7 +120,8 @@ class ReversalApiIntegrationTest {
 
     private MvcTestResult reverse(String subject, String entryId, String json) {
         var request = mvc.post().uri("/api/v1/journal-entries/{id}/reversal", entryId)
-                .with(writer(subject));
+                .with(writer(subject))
+                .header("Idempotency-Key", UUID.randomUUID().toString());
         if (json != null) {
             request = request.contentType(MediaType.APPLICATION_JSON).content(json);
         }

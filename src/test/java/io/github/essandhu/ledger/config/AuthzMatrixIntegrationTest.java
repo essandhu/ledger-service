@@ -73,6 +73,7 @@ class AuthzMatrixIntegrationTest {
         String target = createFixtureAccount("authz-entry-tgt");
         MvcTestResult transfer = mvc.post().uri("/api/v1/transfers")
                 .with(principal("LEDGER_WRITE"))
+                .header("Idempotency-Key", UUID.randomUUID().toString())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                         {"sourceAccountId": "%s", "targetAccountId": "%s",
@@ -155,7 +156,9 @@ class AuthzMatrixIntegrationTest {
 
                 // ── M2 money movers (PLAN §5): LEDGER_WRITE only — no hierarchy, ADMIN 403.
                 // Right-role POST cells use an invalid body {} → 400 (access proven without
-                // creating rows, same trick as POST /accounts above).
+                // creating rows, same trick as POST /accounts above). Since M4 these cells
+                // are doubly 400: the Idempotency-Key header is required and absent here —
+                // either shape defect proves the same thing, that authz opened the door.
                 new Cell("POST", "/api/v1/journal-entries", NONE, 401),
                 new Cell("POST", "/api/v1/journal-entries", NO_ROLES, 403),
                 new Cell("POST", "/api/v1/journal-entries", "LEDGER_READ", 403),

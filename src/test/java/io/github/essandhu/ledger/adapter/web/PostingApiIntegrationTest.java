@@ -131,13 +131,18 @@ class PostingApiIntegrationTest {
                 .content("{\"status\": \"%s\"}".formatted(status))).hasStatusOk();
     }
 
+    /** M4: every write requires Idempotency-Key; these helpers mint a fresh UUID key per call
+     * (the recommended client behavior), so pre-M4 scenarios keep meaning "distinct logical
+     * operations". Replay/conflict semantics get their own suite (IdempotencyApiIntegrationTest). */
     private MvcTestResult postJournal(String subject, String json) {
         return mvc.post().uri("/api/v1/journal-entries").with(writer(subject))
+                .header("Idempotency-Key", UUID.randomUUID().toString())
                 .contentType(MediaType.APPLICATION_JSON).content(json).exchange();
     }
 
     private MvcTestResult postTransfer(String subject, String json) {
         return mvc.post().uri("/api/v1/transfers").with(writer(subject))
+                .header("Idempotency-Key", UUID.randomUUID().toString())
                 .contentType(MediaType.APPLICATION_JSON).content(json).exchange();
     }
 
@@ -389,7 +394,8 @@ class PostingApiIntegrationTest {
         void reversal_of_unknown_entry_is_404() throws SQLException {
             String subject = subject();
             assertThat(mvc.post().uri("/api/v1/journal-entries/{id}/reversal", UUID.randomUUID())
-                    .with(writer(subject)))
+                    .with(writer(subject))
+                    .header("Idempotency-Key", UUID.randomUUID().toString()))
                     .hasStatus(HttpStatus.NOT_FOUND)
                     .hasContentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON);
             assertThat(entryCount(subject)).isZero();
@@ -667,15 +673,18 @@ class PostingApiIntegrationTest {
             // which entry ids exist.
             List<MvcTestResult> results = List.of(
                     mvc.post().uri("/api/v1/journal-entries").with(subjectlessWriter())
+                            .header("Idempotency-Key", UUID.randomUUID().toString())
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(journal(null, leg(a, 100, "EUR"), leg(b, -100, "EUR")))
                             .exchange(),
                     mvc.post().uri("/api/v1/transfers").with(subjectlessWriter())
+                            .header("Idempotency-Key", UUID.randomUUID().toString())
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(transfer(a, b, 100, "EUR"))
                             .exchange(),
                     mvc.post().uri("/api/v1/journal-entries/{id}/reversal", UUID.randomUUID())
                             .with(subjectlessWriter())
+                            .header("Idempotency-Key", UUID.randomUUID().toString())
                             .exchange());
             for (MvcTestResult result : results) {
                 assertThat(result)

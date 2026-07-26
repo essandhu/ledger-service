@@ -43,6 +43,18 @@ public final class FakeJournalRepository implements JournalRepository {
 
     @Override
     public void insert(JournalEntry entry) {
+        if (entry.idempotencyKey() != null) {
+            // The V3 backstop index (ADR-0004): at most one entry per (created_by, key), ever.
+            // The fake polices it like the database would, so a service that stopped checking
+            // the record store cannot pass its unit tests by accident.
+            boolean keyTaken = rows.values().stream()
+                    .anyMatch(existing -> entry.createdBy().equals(existing.createdBy())
+                            && entry.idempotencyKey().equals(existing.idempotencyKey()));
+            if (keyTaken) {
+                throw new IllegalStateException("duplicate (created_by, idempotency_key): ("
+                        + entry.createdBy() + ", " + entry.idempotencyKey() + ")");
+            }
+        }
         if (rows.putIfAbsent(entry.id(), entry) != null) {
             throw new IllegalStateException("duplicate insert for entry " + entry.id());
         }
@@ -52,6 +64,15 @@ public final class FakeJournalRepository implements JournalRepository {
     @Override
     public Optional<JournalEntry> findById(EntryId id) {
         return Optional.ofNullable(rows.get(id));
+    }
+
+    @Override
+    public Optional<JournalEntry> findByCreatorAndKey(String createdBy, String idempotencyKey) {
+        // At most one row can match — insert() polices the backstop uniqueness above.
+        return rows.values().stream()
+                .filter(entry -> createdBy.equals(entry.createdBy())
+                        && idempotencyKey.equals(entry.idempotencyKey()))
+                .findFirst();
     }
 
     @Override

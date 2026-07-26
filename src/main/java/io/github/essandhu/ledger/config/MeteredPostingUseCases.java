@@ -6,7 +6,9 @@ import java.util.function.Supplier;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 
+import io.github.essandhu.ledger.application.port.in.IdempotencyKeyConflict;
 import io.github.essandhu.ledger.application.port.in.PostJournalEntryUseCase;
+import io.github.essandhu.ledger.application.port.in.PostingOutcome;
 import io.github.essandhu.ledger.application.port.in.ReverseEntryUseCase;
 import io.github.essandhu.ledger.application.port.in.TransferFundsUseCase;
 import io.github.essandhu.ledger.application.service.PostingService;
@@ -21,7 +23,6 @@ import io.github.essandhu.ledger.domain.error.UnbalancedEntry;
 import io.github.essandhu.ledger.domain.error.UnknownPostingAccount;
 import io.github.essandhu.ledger.domain.error.ZeroAmountPosting;
 import io.github.essandhu.ledger.domain.model.EntryType;
-import io.github.essandhu.ledger.domain.model.JournalEntry;
 
 /**
  * Micrometer decorator over the three money-moving ports (PLAN §8). It lives HERE, in config,
@@ -42,12 +43,21 @@ import io.github.essandhu.ledger.domain.model.JournalEntry;
  * with its timer sample discarded, keeping the rejected series and the reason counter aligned.
  * {@code account-balance-not-zero} is absent by design: it belongs to the close use case,
  * which these ports do not carry.
+ *
+ * <p>M4, the idempotency pair (PLAN §8): replays bump {@code ledger.idempotency.replayed} and
+ * conflicts {@code ledger.idempotency.conflict} — each with its timer sample DISCARDED, the
+ * same discipline as the unmapped exceptions: nothing was posted, so neither belongs in the
+ * posting duration series, and {@code idempotency-key-conflict} deliberately stays out of the
+ * {@code rejected} reason vocabulary (its counter is the dedicated one, the
+ * account-balance-not-zero precedent).
  */
 final class MeteredPostingUseCases
         implements PostJournalEntryUseCase, TransferFundsUseCase, ReverseEntryUseCase {
 
     private static final String DURATION = "ledger.posting.duration";
     private static final String REJECTED = "ledger.posting.rejected";
+    private static final String REPLAYED = "ledger.idempotency.replayed";
+    private static final String CONFLICT = "ledger.idempotency.conflict";
 
     /**
      * Domain rejection type → problem slug (PLAN §5). Exact classes — no hierarchies exist.
@@ -76,27 +86,36 @@ final class MeteredPostingUseCases
     }
 
     @Override
-    public JournalEntry postEntry(PostEntryCommand command) {
+    public PostingOutcome postEntry(PostEntryCommand command) {
         return timed(EntryType.JOURNAL, () -> delegate.postEntry(command));
     }
 
     @Override
-    public JournalEntry transfer(TransferCommand command) {
+    public PostingOutcome transfer(TransferCommand command) {
         return timed(EntryType.TRANSFER, () -> delegate.transfer(command));
     }
 
     @Override
-    public JournalEntry reverse(ReverseCommand command) {
+    public PostingOutcome reverse(ReverseCommand command) {
         return timed(EntryType.REVERSAL, () -> delegate.reverse(command));
     }
 
-    private JournalEntry timed(EntryType entryType, Supplier<JournalEntry> operation) {
+    private PostingOutcome timed(EntryType entryType, Supplier<PostingOutcome> operation) {
         Timer.Sample sample = Timer.start(registry);
         try {
-            JournalEntry entry = operation.get();
-            sample.stop(registry.timer(DURATION,
-                    "entry_type", entryType.name(), "outcome", "posted"));
-            return entry;
+            PostingOutcome outcome = operation.get();
+            switch (outcome) {
+                case PostingOutcome.Posted posted -> sample.stop(registry.timer(DURATION,
+                        "entry_type", entryType.name(), "outcome", "posted"));
+                case PostingOutcome.Replayed replayed ->
+                        // Nothing was posted — the duration series stays a posting series;
+                        // the dedicated counter accounts for the replay (PLAN §8).
+                        registry.counter(REPLAYED).increment();
+            }
+            return outcome;
+        } catch (IdempotencyKeyConflict conflict) {
+            registry.counter(CONFLICT).increment();
+            throw conflict;
         } catch (RuntimeException e) {
             String reason = REASONS.get(e.getClass());
             if (reason != null) {

@@ -30,6 +30,18 @@ spring:
     jdbc:
       initialize-schema: never   # BATCH_* tables arrive via a Flyway migration in M6
 
+ledger:
+  idempotency:
+    # ADR-0004 retention: expires_at = created_at + ttl, populated from birth; the purge that
+    # would act on it is DESIGNED BUT DISABLED in v1 (records kept indefinitely, option 3a).
+    # Enabling purge.enabled is the recorded future path (3b) — a config change, no migration;
+    # it degrades only replay/conflict diagnostics for purged keys, never double-post safety
+    # (the permanent journal_entry backstop index). purge.interval (ISO-8601, default PT1H)
+    # paces the sweep when enabled.
+    ttl: P90D
+    purge:
+      enabled: false
+
 server:
   port: 8080
 

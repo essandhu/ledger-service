@@ -1,6 +1,7 @@
 package io.github.essandhu.ledger.application.service;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
@@ -8,12 +9,19 @@ import java.util.List;
 import java.util.UUID;
 
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
+import io.github.essandhu.ledger.application.port.in.CanonicalCommand;
 import io.github.essandhu.ledger.application.port.in.EntryNotFound;
+import io.github.essandhu.ledger.application.port.in.IdempotencyKeyConflict;
 import io.github.essandhu.ledger.application.port.in.PostJournalEntryUseCase.PostEntryCommand;
+import io.github.essandhu.ledger.application.port.in.PostingOutcome;
 import io.github.essandhu.ledger.application.port.in.ReverseEntryUseCase.ReverseCommand;
 import io.github.essandhu.ledger.application.port.in.TransferFundsUseCase.TransferCommand;
+import io.github.essandhu.ledger.application.port.out.IdempotencyRecord;
+import io.github.essandhu.ledger.application.port.out.IdempotencyRepository;
+import io.github.essandhu.ledger.application.port.out.WriteResponseRenderer;
 import io.github.essandhu.ledger.domain.error.AccountClosed;
 import io.github.essandhu.ledger.domain.error.AccountFrozen;
 import io.github.essandhu.ledger.domain.error.AmountOverflow;
@@ -37,6 +45,7 @@ import io.github.essandhu.ledger.domain.model.Posting;
 import io.github.essandhu.ledger.domain.model.PostingId;
 import io.github.essandhu.ledger.support.fakes.FakeAccountRepository;
 import io.github.essandhu.ledger.support.fakes.FakeBalanceRepository;
+import io.github.essandhu.ledger.support.fakes.FakeIdempotencyRepository;
 import io.github.essandhu.ledger.support.fakes.FakeJournalRepository;
 import io.github.essandhu.ledger.support.fakes.FixedIdGenerator;
 
@@ -75,13 +84,62 @@ class PostingServiceTest {
     private static final UUID OP1 = UUID.fromString("019817b5-0000-7000-8000-0000000000a1");
     private static final UUID OP2 = UUID.fromString("019817b5-0000-7000-8000-0000000000a2");
 
+    /** The key every canned command posts under (M4) — one logical operation per test. */
+    private static final String IDEM_KEY = "posting-service-test-key";
+    private static final Duration TTL = Duration.ofDays(90);
+
     private final FakeAccountRepository accounts = new FakeAccountRepository();
     private final FakeJournalRepository journal = new FakeJournalRepository();
     private final FakeBalanceRepository balances = new FakeBalanceRepository();
+    private final FakeIdempotencyRepository idempotencyStore = new FakeIdempotencyRepository();
+
+    /** Deterministic stand-in for the web renderer: what matters here is that EXACTLY these
+     * bytes come back on replay, not what real rendering looks like. */
+    private static final WriteResponseRenderer RENDERER = entry ->
+            new WriteResponseRenderer.Rendered(201, "{\"id\":\"" + entry.id().value() + "\"}");
 
     private PostingService service() {
-        return new PostingService(accounts, journal, balances,
-                new FixedIdGenerator(ENTRY, P1, P2, P3, P4), Clock.fixed(T0, ZoneOffset.UTC));
+        return new PostingService(accounts, journal, balances, idempotencyStore, RENDERER,
+                new FixedIdGenerator(ENTRY, P1, P2, P3, P4), Clock.fixed(T0, ZoneOffset.UTC),
+                TTL);
+    }
+
+    /**
+     * The same-key race, made deterministic: a store whose records become visible only on the
+     * SECOND read. The first read is the pre-lock fast path (the winner is still uncommitted
+     * there); every later read models "the winner committed while this request waited on the
+     * balance locks" — READ COMMITTED statement visibility, compressed into a fake.
+     */
+    private PostingService serviceSeeingRecordsOnSecondLook() {
+        IdempotencyRepository secondLook = new IdempotencyRepository() {
+            private int finds;
+
+            @Override
+            public java.util.Optional<IdempotencyRecord> find(String createdBy, String key) {
+                finds++;
+                return finds == 1 ? java.util.Optional.empty()
+                        : idempotencyStore.find(createdBy, key);
+            }
+
+            @Override
+            public void insert(IdempotencyRecord record) {
+                idempotencyStore.insert(record);
+            }
+
+            @Override
+            public int deleteExpiredBatch(Instant cutoff, int batchSize) {
+                return idempotencyStore.deleteExpiredBatch(cutoff, batchSize);
+            }
+        };
+        return new PostingService(accounts, journal, balances, secondLook, RENDERER,
+                new FixedIdGenerator(ENTRY, P1, P2, P3, P4), Clock.fixed(T0, ZoneOffset.UTC),
+                TTL);
+    }
+
+    /** Unwraps the fresh-post outcome (the pre-M4 tests' subject); a replay here is a failure. */
+    private static JournalEntry posted(PostingOutcome outcome) {
+        assertThat(outcome).isInstanceOf(PostingOutcome.Posted.class);
+        return ((PostingOutcome.Posted) outcome).entry();
     }
 
     private AccountId seeded(UUID id, AccountType type, boolean allowNegative,
@@ -99,21 +157,23 @@ class PostingServiceTest {
     }
 
     private static PostEntryCommand entryOf(EntryDraft.Leg... legs) {
-        return new PostEntryCommand("test entry", List.of(legs), "posting-tester");
+        return new PostEntryCommand("test entry", List.of(legs), "posting-tester", IDEM_KEY);
     }
 
     private JournalEntry seededOriginal(AccountId debit, AccountId credit) {
         EntryDraft draft = new EntryDraft("original", List.of(leg(debit, 100), leg(credit, -100)));
         JournalEntry original = JournalEntry.post(new EntryId(ORIGINAL), EntryType.JOURNAL, draft,
-                null, "posting-tester", T0, List.of(new PostingId(OP1), new PostingId(OP2)));
+                null, "posting-tester", null, T0, List.of(new PostingId(OP1), new PostingId(OP2)));
         journal.seed(original);
         return original;
     }
 
-    /** ADR-0004 (sweep item 33): a rejected posting writes NOTHING — no entry, no deltas. */
+    /** ADR-0004 (sweep item 33): a rejected posting writes NOTHING — no entry, no deltas,
+     * and (M4) no idempotency record, so a retry re-executes against clean state. */
     private void assertNothingWritten() {
         assertThat(journal.insertCalls()).as("journal inserts after rejection").isZero();
         assertThat(balances.appliedDeltas()).as("balance deltas after rejection").isEmpty();
+        assertThat(idempotencyStore.insertCalls()).as("idempotency records after rejection").isZero();
     }
 
     @Test
@@ -122,12 +182,14 @@ class PostingServiceTest {
         AccountId cash = seeded(LOW, AccountType.ASSET, false, EUR, 250);
         AccountId equity = seeded(MID, AccountType.EQUITY, false, EUR, 0);
 
-        JournalEntry entry = service().postEntry(entryOf(leg(cash, 100), leg(equity, -100)));
+        JournalEntry entry = posted(service().postEntry(entryOf(leg(cash, 100), leg(equity, -100))));
 
         assertThat(entry.id()).isEqualTo(new EntryId(ENTRY));
         assertThat(entry.entryType()).isEqualTo(EntryType.JOURNAL);
         assertThat(entry.description()).isEqualTo("test entry");
         assertThat(entry.createdBy()).isEqualTo("posting-tester");
+        assertThat(entry.idempotencyKey()).as("ADR-0004: the key rides on the entry forever")
+                .isEqualTo(IDEM_KEY);
         assertThat(entry.postings()).extracting(Posting::id)
                 .containsExactly(new PostingId(P1), new PostingId(P2));
         assertThat(entry.postings()).extracting(Posting::accountId).containsExactly(cash, equity);
@@ -192,7 +254,7 @@ class PostingServiceTest {
         PostEntryCommand usdLegs = new PostEntryCommand("test entry", List.of(
                 new EntryDraft.Leg(cash, Money.of(100, USD)),
                 new EntryDraft.Leg(equity, Money.of(-100, USD))),
-                "posting-tester");
+                "posting-tester", IDEM_KEY);
         assertThatThrownBy(() -> service.postEntry(usdLegs))
                 .isInstanceOf(CurrencyMismatch.class)
                 .hasFieldOrPropertyWithValue("expected", EUR)
@@ -335,7 +397,7 @@ class PostingServiceTest {
         AccountId cash = seeded(LOW, AccountType.ASSET, false, EUR, 0);
         AccountId equity = seeded(MID, AccountType.EQUITY, false, EUR, 0);
 
-        JournalEntry entry = service().postEntry(entryOf(leg(cash, 100), leg(equity, -100)));
+        JournalEntry entry = posted(service().postEntry(entryOf(leg(cash, 100), leg(equity, -100))));
 
         assertThat(entry.postedAt()).isEqualTo(T0);
         assertThat(entry.postings()).extracting(Posting::postedAt).containsOnly(T0);
@@ -355,7 +417,7 @@ class PostingServiceTest {
         Instant lastPostedAt = T0.plus(5, ChronoUnit.MICROS);
         balances.seed(new AccountBalance(cash, 0, 3, lastPostedAt));
 
-        JournalEntry entry = service().postEntry(entryOf(leg(cash, 100), leg(equity, -100)));
+        JournalEntry entry = posted(service().postEntry(entryOf(leg(cash, 100), leg(equity, -100))));
 
         Instant clamped = lastPostedAt.plus(1, ChronoUnit.MICROS);
         assertThat(entry.postedAt()).isEqualTo(clamped);
@@ -372,7 +434,7 @@ class PostingServiceTest {
         balances.seed(new AccountBalance(cash, 0, 1, T0.plus(2, ChronoUnit.MICROS)));
         balances.seed(new AccountBalance(equity, 0, 1, T0.plus(7, ChronoUnit.MICROS)));
 
-        JournalEntry entry = service().postEntry(entryOf(leg(cash, 100), leg(equity, -100)));
+        JournalEntry entry = posted(service().postEntry(entryOf(leg(cash, 100), leg(equity, -100))));
 
         assertThat(entry.postedAt()).isEqualTo(T0.plus(8, ChronoUnit.MICROS));
     }
@@ -384,7 +446,7 @@ class PostingServiceTest {
         AccountId equity = seeded(MID, AccountType.EQUITY, false, EUR, 0);
         balances.seed(new AccountBalance(cash, 0, 4, T0.minus(3, ChronoUnit.MICROS)));
 
-        JournalEntry entry = service().postEntry(entryOf(leg(cash, 100), leg(equity, -100)));
+        JournalEntry entry = posted(service().postEntry(entryOf(leg(cash, 100), leg(equity, -100))));
 
         assertThat(entry.postedAt()).isEqualTo(T0);
     }
@@ -398,7 +460,7 @@ class PostingServiceTest {
         AccountId cash = seeded(LOW, AccountType.ASSET, false, EUR, 0);
         AccountId equity = seeded(MID, AccountType.EQUITY, false, EUR, 0);
 
-        JournalEntry entry = service().postEntry(entryOf(leg(cash, 100), leg(equity, -100)));
+        JournalEntry entry = posted(service().postEntry(entryOf(leg(cash, 100), leg(equity, -100))));
 
         assertThat(entry.postedAt()).isEqualTo(T0);
     }
@@ -409,8 +471,8 @@ class PostingServiceTest {
         AccountId source = seeded(LOW, AccountType.ASSET, false, EUR, 0);
         AccountId target = seeded(MID, AccountType.ASSET, true, EUR, 0);
 
-        JournalEntry entry = service().transfer(new TransferCommand(source, target,
-                Money.of(100, EUR), "move it", "posting-tester"));
+        JournalEntry entry = posted(service().transfer(new TransferCommand(source, target,
+                Money.of(100, EUR), "move it", "posting-tester", IDEM_KEY)));
 
         assertThat(entry.entryType()).isEqualTo(EntryType.TRANSFER);
         assertThat(entry.postings()).hasSize(2);
@@ -427,8 +489,8 @@ class PostingServiceTest {
         AccountId equity = seeded(MID, AccountType.EQUITY, false, EUR, -100);
         JournalEntry original = seededOriginal(cash, equity);
 
-        JournalEntry reversal = service().reverse(
-                new ReverseCommand(original.id(), "undo", "posting-tester"));
+        JournalEntry reversal = posted(service().reverse(
+                new ReverseCommand(original.id(), "undo", "posting-tester", IDEM_KEY)));
 
         assertThat(reversal.entryType()).isEqualTo(EntryType.REVERSAL);
         assertThat(reversal.reversalOf()).isEqualTo(original.id());
@@ -448,11 +510,11 @@ class PostingServiceTest {
         JournalEntry original = seededOriginal(cash, equity);
         journal.seed(JournalEntry.post(new EntryId(P4), EntryType.REVERSAL,
                 JournalEntry.reversalDraftOf(original, null), original.id(), "posting-tester",
-                T0, List.of(new PostingId(OP1), new PostingId(OP2))));
+                null, T0, List.of(new PostingId(OP1), new PostingId(OP2))));
         PostingService service = service();
 
         assertThatThrownBy(() -> service.reverse(
-                new ReverseCommand(original.id(), null, "posting-tester")))
+                new ReverseCommand(original.id(), null, "posting-tester", IDEM_KEY)))
                 .isInstanceOf(EntryAlreadyReversed.class);
 
         // The at-most-once check must run under the lock (the lock serializes the race; the
@@ -465,7 +527,8 @@ class PostingServiceTest {
     @DisplayName("reverse: an unknown original is EntryNotFound (path id → 404) — no lock is taken")
     void reverse_unknown_entry_is_not_found() {
         PostingService service = service();
-        ReverseCommand command = new ReverseCommand(new EntryId(ORIGINAL), null, "posting-tester");
+        ReverseCommand command = new ReverseCommand(new EntryId(ORIGINAL), null, "posting-tester",
+                IDEM_KEY);
 
         assertThatThrownBy(() -> service.reverse(command)).isInstanceOf(EntryNotFound.class);
 
@@ -484,5 +547,253 @@ class PostingServiceTest {
         assertThat(service.byId(original.id())).isEqualTo(original);
         EntryId unknown = new EntryId(P4);
         assertThatThrownBy(() -> service.byId(unknown)).isInstanceOf(EntryNotFound.class);
+    }
+
+    @Nested
+    @DisplayName("M4 idempotency (ADR-0004): replay, conflict, same-transaction record")
+    class Idempotency {
+
+        @Test
+        @DisplayName("I8 (serial): the same command again replays the stored response — nothing executed, not even a lock")
+        void replay_returns_stored_response_and_executes_nothing() {
+            AccountId cash = seeded(LOW, AccountType.ASSET, false, EUR, 0);
+            AccountId equity = seeded(MID, AccountType.EQUITY, false, EUR, 0);
+            PostingService service = service();
+            PostEntryCommand command = entryOf(leg(cash, 100), leg(equity, -100));
+            JournalEntry first = posted(service.postEntry(command));
+
+            PostingOutcome second = service.postEntry(command);
+
+            assertThat(second).isInstanceOf(PostingOutcome.Replayed.class);
+            assertThat(((PostingOutcome.Replayed) second).responseBody())
+                    .as("the stored original response, byte for byte")
+                    .isEqualTo("{\"id\":\"" + first.id().value() + "\"}");
+            assertThat(journal.insertCalls()).as("one entry ever").isEqualTo(1);
+            assertThat(idempotencyStore.insertCalls()).as("one record ever").isEqualTo(1);
+            assertThat(balances.appliedDeltas()).as("balances moved exactly once").hasSize(2);
+            assertThat(balances.lockInvocations())
+                    .as("a replay takes NO balance locks — it never enters the critical section")
+                    .hasSize(1);
+        }
+
+        @Test
+        @DisplayName("I9: same key, different payload → IdempotencyKeyConflict, zero side effects")
+        void different_payload_under_same_key_conflicts_with_zero_side_effects() {
+            AccountId cash = seeded(LOW, AccountType.ASSET, false, EUR, 0);
+            AccountId equity = seeded(MID, AccountType.EQUITY, false, EUR, 0);
+            PostingService service = service();
+            posted(service.postEntry(entryOf(leg(cash, 100), leg(equity, -100))));
+            int insertsAfterFirst = journal.insertCalls();
+            PostEntryCommand tampered = entryOf(leg(cash, 999), leg(equity, -999));
+
+            assertThatThrownBy(() -> service.postEntry(tampered))
+                    .isInstanceOf(IdempotencyKeyConflict.class)
+                    .hasFieldOrPropertyWithValue("idempotencyKey", IDEM_KEY);
+
+            assertThat(journal.insertCalls()).isEqualTo(insertsAfterFirst);
+            assertThat(idempotencyStore.insertCalls()).isEqualTo(1);
+            assertThat(balances.appliedDeltas()).as("balances moved exactly once").hasSize(2);
+        }
+
+        @Test
+        @DisplayName("ADR-0004: the record is the command's canonical hash + the rendered response, stamped with the entry's own instant and TTL")
+        void record_carries_hash_response_and_expiry() {
+            AccountId cash = seeded(LOW, AccountType.ASSET, false, EUR, 0);
+            AccountId equity = seeded(MID, AccountType.EQUITY, false, EUR, 0);
+            PostEntryCommand command = entryOf(leg(cash, 100), leg(equity, -100));
+
+            JournalEntry entry = posted(service().postEntry(command));
+
+            IdempotencyRecord record = idempotencyStore.find("posting-tester", IDEM_KEY)
+                    .orElseThrow();
+            assertThat(record.requestHash()).isEqualTo(CanonicalCommand.hash(command));
+            assertThat(record.entryId()).isEqualTo(entry.id());
+            assertThat(record.responseStatus()).isEqualTo(201);
+            assertThat(record.responseBody()).isEqualTo("{\"id\":\"" + entry.id().value() + "\"}");
+            assertThat(record.createdAt())
+                    .as("one transaction, one instant: the entry's own postedAt")
+                    .isEqualTo(entry.postedAt());
+            assertThat(record.expiresAt()).isEqualTo(entry.postedAt().plus(TTL));
+        }
+
+        @Test
+        @DisplayName("ADR-0004: the verdict precedes validation — a recorded key replays even a payload the domain would reject")
+        void replay_short_circuits_before_draft_validation() {
+            // An UNBALANCED command: only a pre-validation replay can answer it with anything
+            // but UnbalancedEntry. Seed its own hash as already recorded — the retry-after-
+            // response-loss shape, where the stored verdict must win over re-execution.
+            AccountId cash = seeded(LOW, AccountType.ASSET, false, EUR, 0);
+            PostEntryCommand unbalanced = entryOf(leg(cash, 100), leg(cash, -50));
+            idempotencyStore.seed(new IdempotencyRecord("posting-tester", IDEM_KEY,
+                    CanonicalCommand.hash(unbalanced), new EntryId(ORIGINAL), 201,
+                    "{\"stored\":true}", T0, T0.plus(TTL)));
+
+            PostingOutcome outcome = service().postEntry(unbalanced);
+
+            assertThat(outcome).isInstanceOf(PostingOutcome.Replayed.class);
+            assertThat(((PostingOutcome.Replayed) outcome).responseBody())
+                    .isEqualTo("{\"stored\":true}");
+            assertThat(balances.lockInvocations()).isEmpty();
+            assertNothingWritten();
+        }
+
+        @Test
+        @DisplayName("ADR-0004: a replayed reversal answers from the record before the 404 lookup can miss")
+        void reversal_replay_precedes_original_lookup() {
+            ReverseCommand command = new ReverseCommand(new EntryId(ORIGINAL), null,
+                    "posting-tester", IDEM_KEY); // ORIGINAL is never seeded — a fresh attempt 404s
+            idempotencyStore.seed(new IdempotencyRecord("posting-tester", IDEM_KEY,
+                    CanonicalCommand.hash(command), new EntryId(P4), 201,
+                    "{\"stored\":\"reversal\"}", T0, T0.plus(TTL)));
+
+            PostingOutcome outcome = service().reverse(command);
+
+            assertThat(outcome).isInstanceOf(PostingOutcome.Replayed.class);
+            assertThat(((PostingOutcome.Replayed) outcome).responseBody())
+                    .isEqualTo("{\"stored\":\"reversal\"}");
+        }
+
+        @Test
+        @DisplayName("ADR-0004: only successes are recorded — after a rejection, the SAME key legitimately retries and posts")
+        void rejected_attempt_leaves_key_unclaimed_for_a_corrected_retry() {
+            AccountId cash = seeded(LOW, AccountType.ASSET, false, EUR, 0);
+            AccountId equity = seeded(MID, AccountType.EQUITY, false, EUR, 0);
+            PostingService service = service();
+
+            assertThatThrownBy(() -> service.postEntry(entryOf(leg(cash, 100), leg(equity, -50))))
+                    .isInstanceOf(UnbalancedEntry.class);
+            assertNothingWritten();
+
+            // The obstacle removed (balanced now), the same key re-executes and succeeds —
+            // pinning a 422 forever would block exactly this recovery (ADR-0004 §Mechanics).
+            JournalEntry entry = posted(service.postEntry(
+                    entryOf(leg(cash, 100), leg(equity, -100))));
+            assertThat(entry.idempotencyKey()).isEqualTo(IDEM_KEY);
+            assertThat(idempotencyStore.insertCalls()).isEqualTo(1);
+        }
+
+        @Test
+        @DisplayName("race, settled under the lock: a duplicate reversal replays the winner's record — never entry-already-reversed")
+        void race_loser_reversal_replays_under_the_lock_instead_of_domain_422() {
+            AccountId cash = seeded(LOW, AccountType.ASSET, false, EUR, 100);
+            AccountId equity = seeded(MID, AccountType.EQUITY, false, EUR, -100);
+            JournalEntry original = seededOriginal(cash, equity);
+            // The winner's committed reversal: without the under-lock re-read, the loser
+            // would re-run reversalExistsFor against this state and answer 422 for an
+            // operation that SUCCEEDED — the deterministic misfiling the M4 review caught.
+            journal.seed(JournalEntry.post(new EntryId(P4), EntryType.REVERSAL,
+                    JournalEntry.reversalDraftOf(original, null), original.id(),
+                    "posting-tester", null, T0, List.of(new PostingId(OP1), new PostingId(OP2))));
+            ReverseCommand command = new ReverseCommand(original.id(), null, "posting-tester",
+                    IDEM_KEY);
+            // The winner's record becomes visible only on the SECOND read — i.e. after the
+            // loser stopped waiting on the balance locks, exactly the race interleaving.
+            idempotencyStore.seed(new IdempotencyRecord("posting-tester", IDEM_KEY,
+                    CanonicalCommand.hash(command), new EntryId(P4), 201,
+                    "{\"winner\":\"reversal\"}", T0, T0.plus(TTL)));
+
+            PostingOutcome outcome = serviceSeeingRecordsOnSecondLook().reverse(command);
+
+            assertThat(outcome).isInstanceOf(PostingOutcome.Replayed.class);
+            assertThat(((PostingOutcome.Replayed) outcome).responseBody())
+                    .isEqualTo("{\"winner\":\"reversal\"}");
+            assertThat(balances.lockInvocations())
+                    .as("the verdict landed UNDER the lock — the lock was taken").hasSize(1);
+            assertThat(journal.insertCalls()).isZero();
+        }
+
+        @Test
+        @DisplayName("race, settled under the lock: a duplicate transfer that would now overdraft replays — never overdraft")
+        void race_loser_transfer_replays_under_the_lock_instead_of_overdraft() {
+            // The winner already drained the strict TARGET (the credited, −amount side,
+            // PLAN §5) to raw 0; re-judging the duplicate against that state would compute
+            // natural −60 and file the SUCCEEDED transfer as an overdraft — and per
+            // ADR-0004's option-2b analysis, a client told its transfer failed re-sends under
+            // a fresh key, which double-posts.
+            AccountId source = seeded(LOW, AccountType.ASSET, true, EUR, 60);
+            AccountId target = seeded(MID, AccountType.ASSET, false, EUR, 0);
+            TransferCommand command = new TransferCommand(source, target, Money.of(60, EUR),
+                    null, "posting-tester", IDEM_KEY);
+            idempotencyStore.seed(new IdempotencyRecord("posting-tester", IDEM_KEY,
+                    CanonicalCommand.hash(command), new EntryId(P4), 201,
+                    "{\"winner\":\"transfer\"}", T0, T0.plus(TTL)));
+
+            PostingOutcome outcome = serviceSeeingRecordsOnSecondLook().transfer(command);
+
+            assertThat(outcome).isInstanceOf(PostingOutcome.Replayed.class);
+            assertThat(((PostingOutcome.Replayed) outcome).responseBody())
+                    .isEqualTo("{\"winner\":\"transfer\"}");
+            assertThat(journal.insertCalls()).isZero();
+            assertThat(balances.appliedDeltas()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("ADR-0004 option 3b: a purged key replays from the PERMANENT entry — reconstructed body, no re-execution")
+        void purged_key_replays_from_the_permanent_entry() {
+            AccountId cash = seeded(LOW, AccountType.ASSET, false, EUR, 100);
+            AccountId equity = seeded(MID, AccountType.EQUITY, false, EUR, -100);
+            // The entry survived (kept forever); its idempotency record did not (purged).
+            JournalEntry settled = JournalEntry.post(new EntryId(ORIGINAL), EntryType.JOURNAL,
+                    new EntryDraft("test entry", List.of(leg(cash, 100), leg(equity, -100))),
+                    null, "posting-tester", IDEM_KEY, T0,
+                    List.of(new PostingId(OP1), new PostingId(OP2)));
+            journal.seed(settled);
+
+            PostingOutcome outcome = service().postEntry(
+                    entryOf(leg(cash, 100), leg(equity, -100)));
+
+            assertThat(outcome).isInstanceOf(PostingOutcome.Replayed.class);
+            assertThat(((PostingOutcome.Replayed) outcome).responseBody())
+                    .as("the body is RECONSTRUCTED from the entry (may differ from the "
+                            + "original bytes — the documented degradation)")
+                    .isEqualTo("{\"id\":\"" + ORIGINAL + "\"}");
+            assertThat(balances.lockInvocations()).as("settled before any lock").isEmpty();
+            assertThat(journal.insertCalls()).isZero();
+            assertThat(idempotencyStore.insertCalls())
+                    .as("degraded replay does not re-materialize the record").isZero();
+        }
+
+        @Test
+        @DisplayName("ADR-0004 option 3b, the documented loss: after a purge, a DIFFERENT payload under the old key also replays (discrimination went with the record)")
+        void purged_key_reuse_with_different_payload_replays_not_conflicts() {
+            AccountId cash = seeded(LOW, AccountType.ASSET, false, EUR, 100);
+            AccountId equity = seeded(MID, AccountType.EQUITY, false, EUR, -100);
+            journal.seed(JournalEntry.post(new EntryId(ORIGINAL), EntryType.JOURNAL,
+                    new EntryDraft("test entry", List.of(leg(cash, 100), leg(equity, -100))),
+                    null, "posting-tester", IDEM_KEY, T0,
+                    List.of(new PostingId(OP1), new PostingId(OP2))));
+
+            // A tampered reuse would deserve the 422 — but the hash went with the record, so
+            // the old entry comes back as a replay. Money stays safe; diagnostics degrade —
+            // exactly the trade option 3b records (and option 3c's silent double-post is what
+            // this fallback exists to prevent).
+            PostingOutcome outcome = service().postEntry(
+                    entryOf(leg(cash, 999), leg(equity, -999)));
+
+            assertThat(outcome).isInstanceOf(PostingOutcome.Replayed.class);
+            assertThat(journal.insertCalls()).isZero();
+        }
+
+        @Test
+        @DisplayName("ADR-0004 scope 1b: the same key under a DIFFERENT principal is a different scope — both post")
+        void same_key_different_principal_is_a_different_scope() {
+            AccountId cash = seeded(LOW, AccountType.ASSET, false, EUR, 0);
+            AccountId equity = seeded(MID, AccountType.EQUITY, false, EUR, 0);
+            PostingService service = service();
+            posted(service.postEntry(entryOf(leg(cash, 100), leg(equity, -100))));
+
+            // Different createdBy, same key, same payload: not a replay, not a conflict —
+            // per-principal keyspaces are what makes cross-tenant leakage structurally
+            // impossible (a shared keyspace would replay ANOTHER principal's stored response).
+            PostingOutcome other = new PostingService(accounts, journal, balances,
+                    idempotencyStore, RENDERER, new FixedIdGenerator(P3, OP1, OP2),
+                    Clock.fixed(T0, ZoneOffset.UTC), TTL)
+                    .postEntry(new PostEntryCommand("test entry",
+                            List.of(leg(cash, 100), leg(equity, -100)), "other-tester", IDEM_KEY));
+
+            assertThat(other).isInstanceOf(PostingOutcome.Posted.class);
+            assertThat(journal.insertCalls()).isEqualTo(2);
+            assertThat(idempotencyStore.insertCalls()).isEqualTo(2);
+        }
     }
 }

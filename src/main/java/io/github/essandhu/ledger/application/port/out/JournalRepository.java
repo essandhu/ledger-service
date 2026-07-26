@@ -35,6 +35,16 @@ public interface JournalRepository {
     Optional<JournalEntry> findById(EntryId id);
 
     /**
+     * The entry posted under (createdBy, idempotencyKey), if any — the M4 lookup over V3's
+     * permanent partial backstop index. This is what makes ADR-0004 option 3b's degradation
+     * REAL rather than aspirational: after an idempotency record is purged, the entry itself
+     * still answers "this key already succeeded", so a late retry replays (with a
+     * reconstructed body) instead of double-posting or erroring. At most one row can match,
+     * by the backstop index's uniqueness.
+     */
+    Optional<JournalEntry> findByCreatorAndKey(String createdBy, String idempotencyKey);
+
+    /**
      * Whether a REVERSAL pointing at {@code originalId} already exists (I11: at most once).
      * The reversal use case evaluates this INSIDE the locked section — the shared account-set
      * lock serializes double-reversal races (ADR-0003), and the partial unique index

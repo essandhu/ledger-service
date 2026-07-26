@@ -23,6 +23,7 @@ import io.github.essandhu.ledger.application.port.in.GetBalanceQuery;
 import io.github.essandhu.ledger.application.port.in.GetStatementQuery;
 import io.github.essandhu.ledger.application.port.in.PostJournalEntryUseCase;
 import io.github.essandhu.ledger.application.port.in.PostJournalEntryUseCase.PostEntryCommand;
+import io.github.essandhu.ledger.application.port.in.PostingOutcome;
 import io.github.essandhu.ledger.application.port.in.StatementFilter;
 import io.github.essandhu.ledger.application.port.in.StatementPage;
 import io.github.essandhu.ledger.application.port.in.StatementSpec;
@@ -114,9 +115,11 @@ class AsOfConsistencyPropertyIntegrationTest {
             List<Long> modelAmounts = new ArrayList<>();
             List<Instant> modelInstants = new ArrayList<>();
             for (List<Long> mainLegs : plan.mainAmountsPerEntry()) {
-                JournalEntry entry = postEntry.postEntry(
+                // M4: fresh UUID key per posting — like the account markers, run-unique on
+                // purpose (an rng-derived key would REPLAY on seed replay instead of posting).
+                JournalEntry entry = ((PostingOutcome.Posted) postEntry.postEntry(
                         new PostEntryCommand("prop-asof", legsFor(mainLegs, main, counterparty),
-                                CREATED_BY));
+                                CREATED_BY, UUID.randomUUID().toString()))).entry();
                 boundaries.add(entry.postedAt());
                 for (Long amount : mainLegs) {
                     modelAmounts.add(amount);

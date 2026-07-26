@@ -1,6 +1,7 @@
 package io.github.essandhu.ledger.application.service;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -8,20 +9,27 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.transaction.annotation.Transactional;
 
+import io.github.essandhu.ledger.application.port.in.CanonicalCommand;
 import io.github.essandhu.ledger.application.port.in.EntryNotFound;
 import io.github.essandhu.ledger.application.port.in.GetJournalEntryQuery;
+import io.github.essandhu.ledger.application.port.in.IdempotencyKeyConflict;
 import io.github.essandhu.ledger.application.port.in.PostJournalEntryUseCase;
+import io.github.essandhu.ledger.application.port.in.PostingOutcome;
 import io.github.essandhu.ledger.application.port.in.ReverseEntryUseCase;
 import io.github.essandhu.ledger.application.port.in.TransferFundsUseCase;
 import io.github.essandhu.ledger.application.port.out.AccountRepository;
 import io.github.essandhu.ledger.application.port.out.BalanceRepository;
 import io.github.essandhu.ledger.application.port.out.IdGenerator;
+import io.github.essandhu.ledger.application.port.out.IdempotencyRecord;
+import io.github.essandhu.ledger.application.port.out.IdempotencyRepository;
 import io.github.essandhu.ledger.application.port.out.JournalRepository;
+import io.github.essandhu.ledger.application.port.out.WriteResponseRenderer;
 import io.github.essandhu.ledger.domain.error.AmountOverflow;
 import io.github.essandhu.ledger.domain.error.CurrencyMismatch;
 import io.github.essandhu.ledger.domain.error.EntryAlreadyReversed;
@@ -37,7 +45,7 @@ import io.github.essandhu.ledger.domain.model.JournalEntry;
 import io.github.essandhu.ledger.domain.model.PostingId;
 
 /**
- * The posting engine (PLAN §6): one class, four ports, ONE critical section. Every
+ * The posting engine (PLAN §6): one class, ONE critical section. Every
  * money-moving flow — journal, transfer, reversal — funnels through {@link #postUnderLock},
  * which implements ADR-0003 §Decision verbatim: validate the draft with no I/O, lock the
  * balance snapshots of every touched account in canonical order, decide everything
@@ -50,6 +58,21 @@ import io.github.essandhu.ledger.domain.model.PostingId;
  * domain error, never a lock or serialization error, and there is no server-side retry loop
  * (ADR-0003). Because validation precedes every write and the whole method is one transaction,
  * a rejected posting writes NOTHING (ADR-0004: retries re-execute against clean state).
+ *
+ * <p>M4 (ADR-0004): each write method first computes the SHA-256 of its command's frozen
+ * canonical form, then asks {@link #settledOutcome} whether this (principal, key) is already
+ * settled — a recorded success with an equal hash is a {@link PostingOutcome.Replayed}
+ * short-circuit (nothing executed, nothing locked), a different hash is the
+ * {@link IdempotencyKeyConflict} rejection (nothing written), a purged record falls back to
+ * the permanent entry (option 3b's degraded replay), and only a genuine miss proceeds to
+ * post. After a successful posting, the response is rendered and the record inserted IN THE
+ * SAME transaction as the entry — one commit, one truth. Concurrent duplicates settle in two
+ * layers: same-payload duplicates serialize on the balance locks and the loser answers replay
+ * from the under-lock re-read in {@link #postUnderLock} (never a domain 422 recomputed
+ * against post-winner state); duplicates sharing no lock fall to V3's backstop index, whose
+ * violation dooms the loser's transaction and is deliberately NOT caught here — the web
+ * adapter retries the use case once in a fresh transaction, which resolves as replay/conflict
+ * (or, if the winner aborted, as an ordinary first attempt).
  */
 public class PostingService implements PostJournalEntryUseCase, TransferFundsUseCase,
         ReverseEntryUseCase, GetJournalEntryQuery {
@@ -57,31 +80,55 @@ public class PostingService implements PostJournalEntryUseCase, TransferFundsUse
     private final AccountRepository accounts;
     private final JournalRepository journal;
     private final BalanceRepository balances;
+    private final IdempotencyRepository idempotency;
+    private final WriteResponseRenderer responses;
     private final IdGenerator ids;
     private final Clock clock;
+    private final Duration idempotencyTtl;
 
     public PostingService(AccountRepository accounts, JournalRepository journal,
-            BalanceRepository balances, IdGenerator ids, Clock clock) {
+            BalanceRepository balances, IdempotencyRepository idempotency,
+            WriteResponseRenderer responses, IdGenerator ids, Clock clock,
+            Duration idempotencyTtl) {
         this.accounts = accounts;
         this.journal = journal;
         this.balances = balances;
+        this.idempotency = idempotency;
+        this.responses = responses;
         this.ids = ids;
         this.clock = clock;
+        this.idempotencyTtl = idempotencyTtl;
     }
 
     @Override
     @PreAuthorize("hasRole('LEDGER_WRITE')")
     @Transactional
-    public JournalEntry postEntry(PostEntryCommand command) {
+    public PostingOutcome postEntry(PostEntryCommand command) {
+        // ADR-0004: the idempotency verdict precedes even draft validation — a replay
+        // re-executes nothing, and a conflict outranks whatever else is wrong (both 422s;
+        // the conflict names the client bug).
+        String requestHash = CanonicalCommand.hash(command);
+        Optional<PostingOutcome> settled =
+                settledOutcome(command.createdBy(), command.idempotencyKey(), requestHash);
+        if (settled.isPresent()) {
+            return settled.get();
+        }
         // Step 1 (ADR-0003): pure draft validation — I1/I2 fail here, before any I/O.
         EntryDraft draft = new EntryDraft(command.description(), command.legs());
-        return postUnderLock(EntryType.JOURNAL, draft, null, command.createdBy());
+        return postUnderLock(EntryType.JOURNAL, draft, null, command.createdBy(),
+                command.idempotencyKey(), requestHash);
     }
 
     @Override
     @PreAuthorize("hasRole('LEDGER_WRITE')")
     @Transactional
-    public JournalEntry transfer(TransferCommand command) {
+    public PostingOutcome transfer(TransferCommand command) {
+        String requestHash = CanonicalCommand.hash(command);
+        Optional<PostingOutcome> settled =
+                settledOutcome(command.createdBy(), command.idempotencyKey(), requestHash);
+        if (settled.isPresent()) {
+            return settled.get();
+        }
         // PLAN §5, literally: source = DEBIT = +amount, target = CREDIT = −amount. One Money,
         // so the pair balances by construction. negateExact has no answer for Long.MIN_VALUE
         // — translated here, at the accumulation point, per the Money javadoc's contract.
@@ -94,13 +141,22 @@ public class PostingService implements PostJournalEntryUseCase, TransferFundsUse
                     "transfer amount has no 64-bit negation (ADR-0001: checked arithmetic rejects, never wraps)");
         }
         EntryDraft draft = new EntryDraft(command.description(), List.of(sourceLeg, targetLeg));
-        return postUnderLock(EntryType.TRANSFER, draft, null, command.createdBy());
+        return postUnderLock(EntryType.TRANSFER, draft, null, command.createdBy(),
+                command.idempotencyKey(), requestHash);
     }
 
     @Override
     @PreAuthorize("hasRole('LEDGER_WRITE')")
     @Transactional
-    public JournalEntry reverse(ReverseCommand command) {
+    public PostingOutcome reverse(ReverseCommand command) {
+        // Idempotency before the original-entry lookup: a replayed reversal answers from the
+        // record without probing anything, so only a first attempt can 404.
+        String requestHash = CanonicalCommand.hash(command);
+        Optional<PostingOutcome> settled =
+                settledOutcome(command.createdBy(), command.idempotencyKey(), requestHash);
+        if (settled.isPresent()) {
+            return settled.get();
+        }
         // The original's id is a PATH id, so a miss is the 404 EntryNotFound (PLAN §5) — the
         // one pre-lock read of this flow, and deliberately not a status read: immutable rows
         // cannot go stale (I3).
@@ -116,7 +172,60 @@ public class PostingService implements PostJournalEntryUseCase, TransferFundsUse
         }
         // From here the reversal is an ordinary posting (I11: same validation, same locks,
         // same status checks — reversing into a FROZEN account fails, the documented caveat).
-        return postUnderLock(EntryType.REVERSAL, draft, original.id(), command.createdBy());
+        return postUnderLock(EntryType.REVERSAL, draft, original.id(), command.createdBy(),
+                command.idempotencyKey(), requestHash);
+    }
+
+    /**
+     * The full ADR-0004 verdict for (principal, key): empty = unclaimed, proceed to post; a
+     * {@link PostingOutcome.Replayed} = this key already succeeded; the
+     * {@link IdempotencyKeyConflict} = recorded success with a DIFFERENT hash — key reuse,
+     * rejected before any lock or write. Two sources, in order: the idempotency record (the
+     * normal case — stored body byte for byte, hash-discriminated), then the PERMANENT entry
+     * itself via V3's backstop index (option 3b's designed degradation, live from birth: if
+     * the record was purged, the entry still says this key succeeded — the replay body is
+     * RECONSTRUCTED, so it may not be byte-identical, and replay-vs-conflict discrimination is
+     * gone because the hash went with the record; money stays safe, diagnostics degrade).
+     * Without the fallback, a purged key's retry would re-execute into the backstop index and
+     * error forever — precisely the wedge the ADR's retention design exists to preclude.
+     */
+    private Optional<PostingOutcome> settledOutcome(String createdBy, String idempotencyKey,
+            String requestHash) {
+        Optional<PostingOutcome> recorded = replayOrConflict(createdBy, idempotencyKey,
+                requestHash);
+        if (recorded.isPresent()) {
+            return recorded;
+        }
+        return journal.findByCreatorAndKey(createdBy, idempotencyKey)
+                .map(entry -> new PostingOutcome.Replayed(responses.render(entry).body()));
+    }
+
+    /** The record half of {@link #settledOutcome}: replay or conflict from the bookkeeping
+     * row alone. Split out because the under-lock re-read needs ONLY this half — a record
+     * committed while we waited on the locks cannot have been purged in the same instant. */
+    private Optional<PostingOutcome> replayOrConflict(String createdBy, String idempotencyKey,
+            String requestHash) {
+        return idempotency.find(createdBy, idempotencyKey).map(record -> {
+            if (!record.requestHash().equals(requestHash)) {
+                throw new IdempotencyKeyConflict(idempotencyKey);
+            }
+            return new PostingOutcome.Replayed(record.responseBody());
+        });
+    }
+
+    /**
+     * The same-transaction record write (ADR-0004 §Decision, reason 1): rendered response plus
+     * hash, committed atomically with the entry it records. {@code createdAt} is the entry's
+     * own {@code postedAt} — one transaction, one instant (and the clamped instant is the one
+     * the response body carries); {@code expiresAt} = createdAt + TTL, populated from birth so
+     * enabling the purge is configuration, not migration.
+     */
+    private void record(String createdBy, String idempotencyKey, String requestHash,
+            JournalEntry entry) {
+        WriteResponseRenderer.Rendered rendered = responses.render(entry);
+        idempotency.insert(new IdempotencyRecord(createdBy, idempotencyKey, requestHash,
+                entry.id(), rendered.status(), rendered.body(), entry.postedAt(),
+                entry.postedAt().plus(idempotencyTtl)));
     }
 
     @Override
@@ -132,8 +241,8 @@ public class PostingService implements PostJournalEntryUseCase, TransferFundsUse
      * the first write happens only after the last check — so rejection at any step leaves the
      * database untouched (ADR-0004).
      */
-    private JournalEntry postUnderLock(EntryType entryType, EntryDraft draft, EntryId reversalOf,
-            String createdBy) {
+    private PostingOutcome postUnderLock(EntryType entryType, EntryDraft draft,
+            EntryId reversalOf, String createdBy, String idempotencyKey, String requestHash) {
         // Step 2: distinct touched accounts in canonical bytewise UUID order — the one order
         // every lock taker in the system agrees on (BalanceRepository.CANONICAL_ORDER).
         List<AccountId> touched = draft.legs().stream()
@@ -142,6 +251,24 @@ public class PostingService implements PostJournalEntryUseCase, TransferFundsUse
                 .sorted(BalanceRepository.CANONICAL_ORDER)
                 .toList();
         List<AccountBalance> locked = balances.lockBalances(touched);
+
+        // M4, the same-key race's settled ending (ADR-0004): re-read the idempotency record
+        // UNDER the locks. A same-payload duplicate serializes on these very rows, so if a
+        // winner committed while we waited, READ COMMITTED makes its record visible to this
+        // statement — and the duplicate answers replay (or conflict) HERE, before any
+        // account-dependent judgment. Without this re-read, the loser would re-validate
+        // against post-winner state and could be misfiled as a domain rejection: a duplicate
+        // reversal sees the winner's reversal and answers entry-already-reversed, a duplicate
+        // transfer that drained a strict account answers overdraft — 422s for an operation
+        // that SUCCEEDED, the exact failure-mode inversion ADR-0004's option-2b analysis
+        // warns invites a fresh-key resend. The record half suffices (a record committed
+        // moments ago cannot be purged); the backstop-index violation plus the web adapter's
+        // fresh-transaction retry remains for duplicates whose payloads share no lock.
+        Optional<PostingOutcome> settledWhileWaiting =
+                replayOrConflict(createdBy, idempotencyKey, requestHash);
+        if (settledWhileWaiting.isPresent()) {
+            return settledWhileWaiting.get();
+        }
 
         // Step 3: a missing snapshot row IS a missing account (every real account has one by
         // construction: V3 backfill + create-account-tx insert). Reported as the 422
@@ -264,12 +391,13 @@ public class PostingService implements PostJournalEntryUseCase, TransferFundsUse
             postingIds.add(new PostingId(ids.nextId()));
         }
         JournalEntry entry = JournalEntry.post(entryId, entryType, draft, reversalOf, createdBy,
-                postedAt, postingIds);
+                idempotencyKey, postedAt, postingIds);
         journal.insert(entry);
         for (AccountBalance balance : locked) {
             balances.applyDelta(balance.accountId(), deltas.get(balance.accountId()),
                     legCounts.get(balance.accountId()), postedAt);
         }
-        return entry;
+        record(createdBy, idempotencyKey, requestHash, entry);
+        return new PostingOutcome.Posted(entry);
     }
 }

@@ -85,8 +85,8 @@ tasks.jacocoTestCoverageVerification {
             limit {
                 counter = "LINE"
                 value = "COVEREDRATIO"
-                // Coverage ratchet (TEST-STRATEGY.md §5): M1 → 0.70, M2 → 0.80 (current), M4 → 0.85, M7 → 0.90.
-                minimum = "0.80".toBigDecimal()
+                // Coverage ratchet (TEST-STRATEGY.md §5): M1 → 0.70, M2 → 0.80, M4 → 0.85 (current), M7 → 0.90.
+                minimum = "0.85".toBigDecimal()
             }
         }
     }
