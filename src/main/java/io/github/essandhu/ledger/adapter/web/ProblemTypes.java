@@ -37,6 +37,13 @@ public final class ProblemTypes {
     public static final URI ENTRY_ALREADY_REVERSED = URI.create(BASE + "entry-already-reversed");
     public static final URI ACCOUNT_BALANCE_NOT_ZERO = URI.create(BASE + "account-balance-not-zero");
 
+    // M4 (ADR-0004): same key, different payload hash — key reuse, a client bug rejected
+    // loudly. Deliberately NOT part of the ledger.posting.rejected reason set: PLAN §8 gives
+    // conflicts their own counter (ledger.idempotency.conflict), the ACCOUNT_BALANCE_NOT_ZERO
+    // exclusion precedent. Missing/malformed Idempotency-Key headers are shape violations —
+    // bare 400s, no slug, like every other 400.
+    public static final URI IDEMPOTENCY_KEY_CONFLICT = URI.create(BASE + "idempotency-key-conflict");
+
     private ProblemTypes() {
     }
 }

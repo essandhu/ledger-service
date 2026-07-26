@@ -3,6 +3,43 @@
 - Status: Accepted
 - Date: 2026-07-22
 - Deciders: project owner + planning session
+- **Landed M4 (2026-07-26)**, as decided, with the implementation details recorded here:
+  - The canonical form gained a leading `command` type discriminator and escapes strings to
+    **pure ASCII** (every char outside printable ASCII as `\uxxxx`, one escape per UTF-16
+    unit — raw UTF-8 would collapse a lone surrogate into the replacement byte and let two
+    different payloads hash identically); golden-file-frozen in `CanonicalCommandTest`,
+    hand-rolled on the JDK (the I14 rules keep Jackson out of the core — a feature: a frozen
+    form must not move with library upgrades).
+  - `response_body` is stored as `text` with an `IS JSON OBJECT` CHECK rather than the
+    sketched `jsonb`, because `jsonb` re-serialization normalizes key order and would break
+    the byte-identical replay this ADR promises; the record's `created_at` is the entry's own
+    `posted_at` (one transaction, one instant).
+  - §Mechanics' concurrent-duplicate ending is implemented in two layers. Same-payload
+    duplicates serialize on the balance locks, and the loser **re-reads the record under
+    those locks** and answers replay there — necessary, not optional: without the re-read the
+    loser re-validates against post-winner state and a duplicate of a SUCCEEDED operation is
+    misfiled as a domain 422 (deterministically `entry-already-reversed` for reversals;
+    `overdraft` for a transfer that drained a strict account) — the §2b failure-mode
+    inversion, invited back in through the side door. Duplicates sharing no lock still settle
+    through the backstop-index violation plus one web-adapter retry in a fresh transaction
+    (which also covers the winner-aborted case as a clean first attempt).
+  - **Option 3b's degradation is implemented from birth**, not merely designed: on a record
+    miss, the write path falls back to resolving the permanent entry by
+    `(created_by, idempotency_key)` and replays it with a reconstructed body — so enabling
+    the purge really is just configuration (`ledger_app` holds `DELETE` on
+    `idempotency_record` from V4). Cost: one extra indexed read per fresh keyed write.
+  - Key shape is pinned at non-blank / no control characters / **no commas** / ≤ 200 chars
+    (bare 400s). The comma ban is transport hygiene: HTTP stacks join duplicate header fields
+    with commas (RFC 9110), so a comma-bearing key is indistinguishable from an accidentally
+    doubled header, and a key recorded as `K,K` would miss its replay once an intermediary
+    dedupes the retry to `K`.
+  - Proof status, honestly: I8 (serial) and I9 are green; the no-false-conflict half is
+    proven by a port-level property (generated payloads: tampered twin conflicts, equal twin
+    replays) plus an example-based wire test (reordered JSON fields/whitespace replay) — the
+    RANDOM-interleaving I8 hammer remains M5's. The §Mechanics notes promising API-docs
+    text for the block-instead-of-409 behavior and the mutable-response caveat are
+    discharged by PLAN §5's M4 pin for now; client-facing API documentation lands with M7's
+    docs polish.
 
 ## Context and problem statement
 

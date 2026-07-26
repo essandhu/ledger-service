@@ -83,7 +83,7 @@ class BalanceServiceTest {
                 new EntryDraft.Leg(main, Money.of(amount, EUR)),
                 new EntryDraft.Leg(other, Money.of(-amount, EUR))));
         journal.seed(JournalEntry.post(new EntryId(entryId), EntryType.JOURNAL, draft, null,
-                "balance-tester", postedAt,
+                "balance-tester", null, postedAt,
                 List.of(new PostingId(mainPostingId), new PostingId(otherPostingId))));
     }
 
@@ -211,7 +211,8 @@ class BalanceServiceTest {
                 new EntryDraft.Leg(main, Money.of(100, EUR)),
                 new EntryDraft.Leg(main, Money.of(-100, EUR))));
         journal.seed(JournalEntry.post(new EntryId(E1), EntryType.JOURNAL, draft, null,
-                "balance-tester", T0, List.of(new PostingId(P_HIGH), new PostingId(P_MID))));
+                "balance-tester", null, T0,
+                List.of(new PostingId(P_HIGH), new PostingId(P_MID))));
 
         StatementPage page = service.statement(main, StatementFilter.unbounded(),
                 StatementSpec.firstPage(10));

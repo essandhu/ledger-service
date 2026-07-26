@@ -88,6 +88,7 @@ class StatementApiIntegrationTest {
     /** Transfers source→target and returns the created entry id. */
     private String transfer(String source, String target, long amount) {
         MvcTestResult result = mvc.post().uri("/api/v1/transfers").with(writer(subject()))
+                .header("Idempotency-Key", UUID.randomUUID().toString())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                         {"sourceAccountId": "%s", "targetAccountId": "%s",

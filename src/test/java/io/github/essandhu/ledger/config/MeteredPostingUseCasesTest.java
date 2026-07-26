@@ -77,4 +77,18 @@ class MeteredPostingUseCasesTest {
         assertThat(MeteredPostingUseCases.REASONS.values())
                 .doesNotContain(slug(ProblemTypes.ACCOUNT_BALANCE_NOT_ZERO));
     }
+
+    @Test
+    @DisplayName("M4: idempotency-key-conflict is deliberately absent too — conflicts have their own counter (PLAN §8)")
+    void idempotency_conflict_is_deliberately_absent_from_the_posting_vocabulary() {
+        // Same exclusion posture as the close rejection: a key conflict is not a posting
+        // rejection — nothing was validated, locked, or judged. PLAN §8 gives it the
+        // dedicated ledger.idempotency.conflict counter; adding the slug (and the class) to
+        // REASONS would double-count every conflict across two series.
+        assertThat(MeteredPostingUseCases.REASONS.values())
+                .doesNotContain(slug(ProblemTypes.IDEMPOTENCY_KEY_CONFLICT));
+        assertThat(MeteredPostingUseCases.REASONS.keySet())
+                .doesNotContain(io.github.essandhu.ledger.application.port.in
+                        .IdempotencyKeyConflict.class);
+    }
 }

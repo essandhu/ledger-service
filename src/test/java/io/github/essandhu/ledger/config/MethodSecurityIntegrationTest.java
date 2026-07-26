@@ -132,7 +132,8 @@ class MethodSecurityIntegrationTest {
         assertThatThrownBy(() -> transferFunds.transfer(transferProbeCommand()))
                 .isInstanceOf(AccessDeniedException.class);
         assertThatThrownBy(() -> reverseEntry.reverse(new ReverseCommand(
-                new EntryId(UUID.randomUUID()), null, "method-security-test")))
+                new EntryId(UUID.randomUUID()), null, "method-security-test",
+                UUID.randomUUID().toString())))
                 .isInstanceOf(AccessDeniedException.class);
 
         authenticateWithRoles("LEDGER_WRITE", "LEDGER_ADMIN"); // wrong roles for a read
@@ -151,7 +152,8 @@ class MethodSecurityIntegrationTest {
         assertThatThrownBy(() -> transferFunds.transfer(transferProbeCommand()))
                 .isInstanceOf(UnknownPostingAccount.class);
         assertThatThrownBy(() -> reverseEntry.reverse(new ReverseCommand(
-                new EntryId(UUID.randomUUID()), null, "method-security-test")))
+                new EntryId(UUID.randomUUID()), null, "method-security-test",
+                UUID.randomUUID().toString())))
                 .isInstanceOf(EntryNotFound.class);
 
         authenticateWithRoles("LEDGER_READ");
@@ -193,12 +195,13 @@ class MethodSecurityIntegrationTest {
         return new PostEntryCommand("method-security-probe", List.of(
                 new EntryDraft.Leg(new AccountId(UUID.randomUUID()), Money.of(100, eur)),
                 new EntryDraft.Leg(new AccountId(UUID.randomUUID()), Money.of(-100, eur))),
-                "method-security-test");
+                "method-security-test", UUID.randomUUID().toString());
     }
 
     private static TransferCommand transferProbeCommand() {
         return new TransferCommand(new AccountId(UUID.randomUUID()),
                 new AccountId(UUID.randomUUID()),
-                Money.of(100, new CurrencyCode("EUR")), null, "method-security-test");
+                Money.of(100, new CurrencyCode("EUR")), null, "method-security-test",
+                UUID.randomUUID().toString());
     }
 }

@@ -30,14 +30,14 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
  * defaults, and the artifact ships as generated.
  */
 @LedgerIntegrationTest
-@DisplayName("OpenAPI: the spec describes the M1+M2+M3 surface and becomes the CI artifact")
+@DisplayName("OpenAPI: the spec describes the M1+M2+M3+M4 surface and becomes the CI artifact")
 class OpenApiDocumentationTest {
 
     @Autowired
     private MockMvcTester mvc;
 
     @Test
-    @DisplayName("/v3/api-docs covers the account, posting, and balance operations, secured with bearer JWT")
+    @DisplayName("/v3/api-docs covers the account, posting, balance, and idempotency operations, secured with bearer JWT")
     void api_docs_cover_the_account_surface_and_are_written_for_ci() throws Exception {
         MvcTestResult result = mvc.get().uri("/v3/api-docs").with(jwt()).exchange();
         assertThat(result).hasStatusOk();
@@ -58,6 +58,19 @@ class OpenApiDocumentationTest {
         assertThat(reversal).containsKeys("post");
         Map<String, Object> transfers = JsonPath.read(spec, "$.paths['/api/v1/transfers']");
         assertThat(transfers).containsKeys("post");
+
+        // M4 (ADR-0004): the Idempotency-Key header parameter is documented — required, in
+        // header — on every money-moving POST, straight from the controller signatures.
+        for (String path : new String[] {"/api/v1/journal-entries",
+                "/api/v1/journal-entries/{id}/reversal", "/api/v1/transfers"}) {
+            java.util.List<Map<String, Object>> parameters = JsonPath.read(spec,
+                    "$.paths['%s'].post.parameters[?(@.name == 'Idempotency-Key')]"
+                            .formatted(path));
+            assertThat(parameters).as("Idempotency-Key documented on POST " + path).hasSize(1);
+            assertThat(parameters.get(0))
+                    .containsEntry("in", "header")
+                    .containsEntry("required", true);
+        }
 
         // M3 balance & statement surface (PLAN §5).
         Map<String, Object> balance =

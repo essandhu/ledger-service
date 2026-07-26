@@ -172,10 +172,14 @@ jobs:
 
           # -D - interleaves the response headers into the capture, so one request yields the
           # status (-w, on its own final line), the Location header, and the body (Spring writes
-          # compact JSON: the single {-prefixed line).
+          # compact JSON: the single {-prefixed line). M4: every money-moving POST requires
+          # Idempotency-Key; this transfer's key is remembered for the replay demo below.
+          m4_key="m4-smoke-transfer-key"
+          transfer_body="{\"sourceAccountId\": \"$src_id\", \"targetAccountId\": \"$tgt_id\", \"amount\": {\"amount\": 12345, \"currency\": \"EUR\"}, \"description\": \"M2 smoke transfer\"}"
           transfer=$(curl -s -D - -w '\n%{http_code}' -X POST \
             -H "Authorization: Bearer $token" -H 'Content-Type: application/json' \
-            -d "{\"sourceAccountId\": \"$src_id\", \"targetAccountId\": \"$tgt_id\", \"amount\": {\"amount\": 12345, \"currency\": \"EUR\"}, \"description\": \"M2 smoke transfer\"}" \
+            -H "Idempotency-Key: $m4_key" \
+            -d "$transfer_body" \
             http://localhost:8080/api/v1/transfers)
           code=$(tail -n 1 <<< "$transfer")
           if [ "$code" != "201" ]; then
@@ -219,6 +223,7 @@ jobs:
           # entry that does not balance (I1) ...
           rejection=$(curl -s -w '\n%{http_code}' -X POST \
             -H "Authorization: Bearer $token" -H 'Content-Type: application/json' \
+            -H 'Idempotency-Key: m4-smoke-unbalanced-key' \
             -d "{\"description\": \"M2 smoke unbalanced\", \"postings\": [
                   {\"accountId\": \"$src_id\", \"amount\": {\"amount\": 100, \"currency\": \"EUR\"}},
                   {\"accountId\": \"$tgt_id\", \"amount\": {\"amount\": -60, \"currency\": \"EUR\"}}]}" \
@@ -238,6 +243,7 @@ jobs:
           # sending 99999 back out of it must be refused with nothing recorded.
           rejection=$(curl -s -w '\n%{http_code}' -X POST \
             -H "Authorization: Bearer $token" -H 'Content-Type: application/json' \
+            -H 'Idempotency-Key: m4-smoke-overdraft-key' \
             -d "{\"sourceAccountId\": \"$tgt_id\", \"targetAccountId\": \"$src_id\", \"amount\": {\"amount\": 99999, \"currency\": \"EUR\"}, \"description\": \"M2 smoke overdraft\"}" \
             http://localhost:8080/api/v1/transfers)
           code=$(tail -n 1 <<< "$rejection")
@@ -346,6 +352,64 @@ jobs:
             exit 1
           fi
           echo "statement demo OK — keyset page, echoed cursor when caught up, foreign cursor 400 (M3)"
+
+          # --- M4 demo (PLAN §9, ADR-0004): replay a curl → same entry id, 200,
+          # Idempotency-Replayed: true; tampered replay → 422 idempotency-key-conflict;
+          # missing header → 400. Real Keycloak token, real database arbitration.
+          replay=$(curl -s -D - -w '\n%{http_code}' -X POST \
+            -H "Authorization: Bearer $token" -H 'Content-Type: application/json' \
+            -H "Idempotency-Key: $m4_key" \
+            -d "$transfer_body" \
+            http://localhost:8080/api/v1/transfers)
+          code=$(tail -n 1 <<< "$replay")
+          if [ "$code" != "200" ]; then
+            echo "replay expected 200, got $code; response: $replay"
+            exit 1
+          fi
+          if ! grep -qi '^idempotency-replayed: true' <<< "$replay"; then
+            echo "replay must carry Idempotency-Replayed: true; response: $replay"
+            exit 1
+          fi
+          replay_id=$(grep '^{' <<< "$replay" | jq -r '.id // empty')
+          if [ "$replay_id" != "$entry_id" ]; then
+            echo "replay expected the ORIGINAL entry id $entry_id, got: $replay_id"
+            exit 1
+          fi
+          # Balances unmoved: the source still reads raw +12345 with one posting.
+          bal=$(curl -s -H "Authorization: Bearer $ro_token" \
+            "http://localhost:8080/api/v1/accounts/$src_id/balance")
+          summary=$(jq -r '[.rawBalance.amount, .postingCount] | join("|")' <<< "$bal")
+          if [ "$summary" != "12345|1" ]; then
+            echo "replay must not move balances; source expected 12345|1, got: $summary"
+            exit 1
+          fi
+          # Tampered replay: same key, different amount → 422, the pinned conflict type.
+          conflict=$(curl -s -w '\n%{http_code}' -X POST \
+            -H "Authorization: Bearer $token" -H 'Content-Type: application/json' \
+            -H "Idempotency-Key: $m4_key" \
+            -d "{\"sourceAccountId\": \"$src_id\", \"targetAccountId\": \"$tgt_id\", \"amount\": {\"amount\": 99, \"currency\": \"EUR\"}, \"description\": \"M2 smoke transfer\"}" \
+            http://localhost:8080/api/v1/transfers)
+          code=$(tail -n 1 <<< "$conflict")
+          body=$(head -n -1 <<< "$conflict")
+          if [ "$code" != "422" ]; then
+            echo "tampered replay expected 422, got $code; response: $body"
+            exit 1
+          fi
+          ptype=$(jq -r '.type // empty' <<< "$body")
+          if [ "$ptype" != "https://essandhu.github.io/ledger/problems/idempotency-key-conflict" ]; then
+            echo "tampered replay expected the idempotency-key-conflict problem type, got: $ptype"
+            exit 1
+          fi
+          # The header is required: the same request without a key is a 400, nothing posted.
+          code=$(curl -s -o /dev/null -w '%{http_code}' -X POST \
+            -H "Authorization: Bearer $token" -H 'Content-Type: application/json' \
+            -d "$transfer_body" \
+            http://localhost:8080/api/v1/transfers)
+          if [ "$code" != "400" ]; then
+            echo "missing Idempotency-Key expected 400, got $code"
+            exit 1
+          fi
+          echo "idempotency demo OK — replay 200 + Idempotency-Replayed + same entry id, tampered 422 conflict, missing header 400 (M4, ADR-0004)"
 
           docker compose logs --no-color app > app.log
           grep -q "Started LedgerApplication" app.log

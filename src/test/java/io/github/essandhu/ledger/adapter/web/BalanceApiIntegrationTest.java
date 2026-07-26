@@ -92,6 +92,7 @@ class BalanceApiIntegrationTest {
     /** Transfers {@code amount} source→target and returns the entry's posted_at (read back). */
     private Instant transfer(String source, String target, long amount) {
         MvcTestResult result = mvc.post().uri("/api/v1/transfers").with(writer(subject()))
+                .header("Idempotency-Key", UUID.randomUUID().toString())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                         {"sourceAccountId": "%s", "targetAccountId": "%s",

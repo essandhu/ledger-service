@@ -100,7 +100,10 @@ class PostingConservationPropertyIntegrationTest {
         Gen<List<List<EntryDraft.Leg>>> batches = balancedLegsOver(pools).listOf(1, 3);
         Iterations.withReducedDefault(REDUCED_ITERATIONS, () -> Property.check(batches, batch -> {
             for (List<EntryDraft.Leg> legs : batch) {
-                postEntry.postEntry(new PostEntryCommand("prop-conservation", legs, CREATED_BY));
+                // M4: fresh UUID key per posting (run-unique like the account markers — an
+                // rng-derived key would REPLAY on seed replay instead of posting).
+                postEntry.postEntry(new PostEntryCommand("prop-conservation", legs, CREATED_BY,
+                        UUID.randomUUID().toString()));
             }
             assertI4(allAccounts);
             assertI5(allAccounts);

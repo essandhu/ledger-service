@@ -53,7 +53,8 @@ class JournalEntryTest {
     private static JournalEntry transfer() {
         EntryDraft draft = new EntryDraft("rent, july",
                 List.of(leg(CASH, 1099, EUR), leg(REVENUE, -1099, EUR)));
-        return JournalEntry.post(ENTRY, EntryType.TRANSFER, draft, null, "alice", T0, List.of(P1, P2));
+        return JournalEntry.post(ENTRY, EntryType.TRANSFER, draft, null, "alice", "rent-key",
+                T0, List.of(P1, P2));
     }
 
     @Nested
@@ -69,6 +70,9 @@ class JournalEntryTest {
             assertThat(entry.description()).isEqualTo("rent, july");
             assertThat(entry.reversalOf()).isNull();
             assertThat(entry.createdBy()).isEqualTo("alice");
+            assertThat(entry.idempotencyKey())
+                    .as("M4: the key is part of the posted fact (ADR-0004)")
+                    .isEqualTo("rent-key");
             assertThat(entry.postedAt()).isEqualTo(T0);
             assertThat(entry.postings()).containsExactly(
                     new Posting(P1, ENTRY, CASH, Money.of(1099, EUR), T0),
@@ -81,7 +85,8 @@ class JournalEntryTest {
             EntryDraft draft = new EntryDraft(null,
                     List.of(leg(CASH, 1, EUR), leg(REVENUE, -1, EUR)));
             assertThatThrownBy(() ->
-                    JournalEntry.post(ENTRY, EntryType.JOURNAL, draft, null, "alice", T0, List.of(P1)))
+                    JournalEntry.post(ENTRY, EntryType.JOURNAL, draft, null, "alice", null, T0,
+                            List.of(P1)))
                     .isInstanceOf(IllegalArgumentException.class);
         }
 
@@ -105,7 +110,8 @@ class JournalEntryTest {
             EntryDraft draft = new EntryDraft(null,
                     List.of(leg(CASH, 1, EUR), leg(REVENUE, -1, EUR)));
             assertThatThrownBy(() ->
-                    JournalEntry.post(ENTRY, EntryType.REVERSAL, draft, null, "alice", T0, List.of(P1, P2)))
+                    JournalEntry.post(ENTRY, EntryType.REVERSAL, draft, null, "alice", null, T0,
+                            List.of(P1, P2)))
                     .isInstanceOf(IllegalArgumentException.class);
         }
 
@@ -115,14 +121,16 @@ class JournalEntryTest {
             EntryDraft draft = new EntryDraft(null,
                     List.of(leg(CASH, 1, EUR), leg(REVENUE, -1, EUR)));
             assertThatThrownBy(() ->
-                    JournalEntry.post(ENTRY, EntryType.TRANSFER, draft, OTHER_ENTRY, "alice", T0, List.of(P1, P2)))
+                    JournalEntry.post(ENTRY, EntryType.TRANSFER, draft, OTHER_ENTRY, "alice", null,
+                            T0, List.of(P1, P2)))
                     .isInstanceOf(IllegalArgumentException.class);
         }
 
         @Test
         @DisplayName("rejects a posting that belongs to another entry")
         void rejects_foreign_posting() {
-            assertThatThrownBy(() -> new JournalEntry(ENTRY, EntryType.JOURNAL, null, null, "alice", T0,
+            assertThatThrownBy(() -> new JournalEntry(ENTRY, EntryType.JOURNAL, null, null, "alice",
+                    null, T0,
                     List.of(new Posting(P1, ENTRY, CASH, Money.of(1, EUR), T0),
                             new Posting(P2, OTHER_ENTRY, REVENUE, Money.of(-1, EUR), T0))))
                     .isInstanceOf(IllegalArgumentException.class);
@@ -157,7 +165,7 @@ class JournalEntryTest {
                     leg(CASH, 500, EUR), leg(REVENUE, -500, EUR),
                     leg(CASH, 300, JPY), leg(VAT, -300, JPY)));
             JournalEntry original = JournalEntry.post(ENTRY, EntryType.JOURNAL, draft, null,
-                    "alice", T0, List.of(P1, P2, P3,
+                    "alice", null, T0, List.of(P1, P2, P3,
                             new PostingId(UUID.fromString("019817b4-0000-7000-8000-0000000000f4"))));
             EntryDraft reversal = JournalEntry.reversalDraftOf(original, null);
 
@@ -200,7 +208,7 @@ class JournalEntryTest {
                     leg(REVENUE, Long.MAX_VALUE, EUR),
                     leg(VAT, 1, EUR)));
             JournalEntry original = JournalEntry.post(ENTRY, EntryType.JOURNAL, draft, null,
-                    "alice", T0, List.of(P1, P2, P3));
+                    "alice", null, T0, List.of(P1, P2, P3));
             assertThatThrownBy(() -> JournalEntry.reversalDraftOf(original, null))
                     .isInstanceOf(ArithmeticException.class);
         }

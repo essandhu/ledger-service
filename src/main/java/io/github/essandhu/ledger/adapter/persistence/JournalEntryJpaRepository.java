@@ -1,5 +1,6 @@
 package io.github.essandhu.ledger.adapter.persistence;
 
+import java.util.Optional;
 import java.util.UUID;
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -15,4 +16,9 @@ interface JournalEntryJpaRepository extends JpaRepository<JournalEntryJpaEntity,
      * serialization (ADR-0003).
      */
     boolean existsByReversalOf(UUID originalId);
+
+    /** M4 (ADR-0004 option 3b): the purged-key lookup, served by the partial backstop index
+     * {@code journal_entry_idem_backstop} — unique, so Optional not List. */
+    Optional<JournalEntryJpaEntity> findByCreatedByAndIdempotencyKey(String createdBy,
+            String idempotencyKey);
 }

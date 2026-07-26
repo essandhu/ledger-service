@@ -48,8 +48,8 @@ class JournalEntryJpaEntity implements Persistable<UUID> {
 
     private UUID reversalOf;
 
-    /** NULL for every M2 write — M4 wires the Idempotency-Key header. Mapped from birth so
-     * arming the ADR-0004 backstop is a value change in M4, not a mapping change. */
+    /** The client's Idempotency-Key (M4, ADR-0004): with createdBy, one entry per (principal,
+     * key) forever via the V3 backstop index. NULL on pre-M4 rows. */
     private String idempotencyKey;
 
     private String createdBy;
@@ -66,7 +66,7 @@ class JournalEntryJpaEntity implements Persistable<UUID> {
         entity.entryType = entry.entryType();
         entity.description = entry.description();
         entity.reversalOf = entry.reversalOf() == null ? null : entry.reversalOf().value();
-        entity.idempotencyKey = null;
+        entity.idempotencyKey = entry.idempotencyKey();
         entity.createdBy = entry.createdBy();
         entity.postedAt = entry.postedAt();
         return entity;
@@ -79,8 +79,8 @@ class JournalEntryJpaEntity implements Persistable<UUID> {
      */
     JournalEntry toDomain(List<Posting> postings) {
         return new JournalEntry(new EntryId(id), entryType, description,
-                reversalOf == null ? null : new EntryId(reversalOf), createdBy, postedAt,
-                postings);
+                reversalOf == null ? null : new EntryId(reversalOf), createdBy, idempotencyKey,
+                postedAt, postings);
     }
 
     @Override

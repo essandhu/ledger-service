@@ -17,6 +17,8 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExcep
 
 import io.github.essandhu.ledger.application.port.in.AccountNotFound;
 import io.github.essandhu.ledger.application.port.in.EntryNotFound;
+import io.github.essandhu.ledger.application.port.in.IdempotencyKeyConflict;
+import io.github.essandhu.ledger.application.port.in.InvalidIdempotencyKey;
 import io.github.essandhu.ledger.domain.error.AccountBalanceNotZero;
 import io.github.essandhu.ledger.domain.error.AccountClosed;
 import io.github.essandhu.ledger.domain.error.AccountFrozen;
@@ -205,6 +207,26 @@ class LedgerExceptionHandler extends ResponseEntityExceptionHandler {
         problem.setTitle("Account balance is not zero");
         problem.setProperty("accountId", exception.accountId().value());
         return problem;
+    }
+
+    @ExceptionHandler(IdempotencyKeyConflict.class)
+    ProblemDetail idempotencyKeyConflict(IdempotencyKeyConflict exception) {
+        // M4 (ADR-0004, I9): key reuse with a different payload — a business-rule 422 with its
+        // pinned slug, per the IETF idempotency draft's recommendation. The key rides along as
+        // a machine-readable property (it is the client's own value — nothing disclosed).
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.UNPROCESSABLE_CONTENT, exception.getMessage());
+        problem.setType(ProblemTypes.IDEMPOTENCY_KEY_CONFLICT);
+        problem.setTitle("Idempotency key conflict");
+        problem.setProperty("idempotencyKey", exception.idempotencyKey());
+        return problem;
+    }
+
+    @ExceptionHandler(InvalidIdempotencyKey.class)
+    ProblemDetail invalidIdempotencyKey(InvalidIdempotencyKey exception) {
+        // M4 key shape rules (blank, oversized, control characters): the request can never be
+        // valid — bare 400 like every shape violation; the typed slug belongs to the conflict.
+        return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, exception.getMessage());
     }
 
     @ExceptionHandler(EntryNotFound.class)
