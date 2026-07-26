@@ -24,9 +24,11 @@ jobs:
           distribution: temurin
           java-version: "21"
       - uses: gradle/actions/setup-gradle@v6
-      # build runs: compile, all test suites (Testcontainers → real PostgreSQL on the runner's
-      # Docker), ArchUnit rules, and the JaCoCo coverage gate (ratchet: TEST-STRATEGY.md §5).
-      - run: ./gradlew build
+      # build runs: compile, the default test lane (Testcontainers → real PostgreSQL on the
+      # runner's Docker), ArchUnit rules, and the JaCoCo coverage gate (ratchet:
+      # TEST-STRATEGY.md §5). The concurrency lane is EXCLUDED here only because it runs as
+      # its own required job below, in parallel — a local `./gradlew build` still runs both.
+      - run: ./gradlew build -x concurrencyTest
       - uses: actions/upload-artifact@v7
         if: always()
         with:
@@ -41,6 +43,28 @@ jobs:
           name: openapi
           path: build/openapi/openapi.json
           if-no-files-found: error
+
+  concurrency-proof:
+    # M5 (TEST-STRATEGY §5): the parallel-writer proof — I6 racy, I7, I8 racy, I17 — as its
+    # own required job, in parallel with the default lane rather than serialized behind it.
+    # "Required" is finished in branch protection, not here: add THIS job's display name to
+    # the required status checks (one-time repo setting). The name stays stable and does NOT
+    # embed the invariant list — protection matches check names verbatim, and a renamed job
+    # silently un-requires itself.
+    # Sizing knobs for a bigger hammer: ./gradlew concurrencyTest
+    # -Dledger.concurrency.threads=N -Dledger.concurrency.iterations=M (TEST-STRATEGY §4);
+    # the harness scales its hang-detector bound with the requested work.
+    name: Concurrency proof
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@v6
+      - run: ./gradlew concurrencyTest
 
   smoke:
     name: docker-compose smoke test

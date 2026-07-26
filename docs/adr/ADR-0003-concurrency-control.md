@@ -159,6 +159,25 @@ run against real PostgreSQL 18.4 via Testcontainers (no H2 anywhere):
   interleaving safety; a property test on the persistence adapter additionally asserts the lock
   query orders arbitrary account-UUID inputs canonically.
 
+**Landed M5 (2026-07-26).** Two lanes. The `concurrency`-tagged stress suite runs as its own CI
+job (`Concurrency proof`; enrolling it in branch protection's required checks is the one-time
+repo setting that finishes TEST-STRATEGY §5's "required"): `DepositRaceConcurrencyTest` (I7),
+`OverdraftRaceConcurrencyTest` (I6 — deposits racing withdrawals, final state plus a
+full-history prefix walk, which mixed traffic makes the only sound verdict),
+`BidirectionalTransferConcurrencyTest` (I17 with I4/I5 and the lock-wait metric asserted), and
+`IdempotencyRaceConcurrencyTest` (I8 across all three duplicate families) — all driving the real
+HTTP surface on 8 workers against the Hikari-10 pool. The two sequential M5 property suites run
+in the DEFAULT lane (they carry only the `integration` tag): `StatefulModelPropertyIntegrationTest`
+compares verdict, canonical first offender, and full observable state against `ModelLedger`
+after every command, and `LockOrderPropertyIntegrationTest` generalizes
+`BalanceLockIntegrationTest`'s fixed adversarial ids to arbitrary generated inputs — each
+iteration doubling as an agreement proof between `UUID_BYTEWISE_ORDER` and PostgreSQL's
+`ORDER BY account_id`. Honesty note on I17's reach: the SUT takes all balance locks in ONE
+statement whose `ORDER BY` imposes the canonical order regardless of bind order, so the hammer
+proves deadlock-freedom of the system as built and catches any regression to lock-as-you-go
+acquisition, but cannot see removal of the Java-side pre-sorts — those are policed by the unit
+fake's sorted-input contract and the lock-order property.
+
 ## Pros and cons of the options
 
 ### Option A — pessimistic ordered `SELECT … FOR UPDATE` @ READ COMMITTED (chosen)

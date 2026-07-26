@@ -64,7 +64,15 @@ generate (longs, currencies, small object graphs), so we need perhaps 10% of wha
   the generator, not the shrinker.
 - **Stateful model testing** (M5): a command-sequence runner (generate `CreateAccount` /
   `Transfer` / `Freeze` / `Reverse` commands, apply to both an in-memory model ledger and the real
-  service on Testcontainers PostgreSQL, compare observable state after every step).
+  service on Testcontainers PostgreSQL, compare observable state after every step). **Landed M5
+  (2026-07-26)** as `StatefulModelPropertyIntegrationTest` + `support/model/ModelLedger`:
+  commands address accounts by INDEX because generation is a pure function of the rng while
+  real account ids are only born at execution time. Counterexamples are reported UNSHRUNK —
+  a scenario is a record, and this harness's shrinker covers numeric/list shapes only (the
+  contract above) — so seed replay, not minimization, is the reproduction story. The model
+  mirrors the service's pinned decision order (I11 → per-leg currency/status →
+  canonical-order overdraft, first offender compared too) and its teeth were proven by
+  mutation before trust (a model with a rule deleted fails the suite with a replayable seed).
 - The harness itself is test-covered (meta-tests: a deliberately false property must fail and
   report a replayable seed; shrinking must terminate).
 
