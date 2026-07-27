@@ -28,7 +28,9 @@ jobs:
       # runner's Docker), ArchUnit rules, and the JaCoCo coverage gate (0.90 overall, 1.00
       # exact on the domain packages). The concurrency lane is EXCLUDED here only because it runs as
       # its own required job below, in parallel — a local `./gradlew build` still runs both.
-      - run: ./gradlew build -x concurrencyTest
+      # Root-scoped (leading colon) since M8 made the build multi-project: the console builds
+      # in its own job below, and an unqualified `build` would run it twice.
+      - run: ./gradlew :build -x concurrencyTest
       - uses: actions/upload-artifact@v7
         if: always()
         with:
@@ -63,7 +65,32 @@ jobs:
           distribution: temurin
           java-version: "21"
       - uses: gradle/actions/setup-gradle@v6
-      - run: ./gradlew concurrencyTest
+      # Root-scoped like the build job — the console defines no concurrency lane.
+      - run: ./gradlew :concurrencyTest
+
+  console-build:
+    # M8 (ADR-0007): the console subproject's own lane — compile, tests, and its own JaCoCo
+    # gate (0.70: the console's ratchet starts where the core's did at M1; the root
+    # 0.90/domain-1.00 gate is per-project config and cannot be diluted by this one).
+    # Same protection rule as above: once enrolled, this display name is a branch-protection
+    # key — never rename it. Enroll AFTER the first green run on main.
+    name: Console build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@v6
+      - run: ./gradlew :console:build
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: console-coverage-report
+          path: console/build/reports/jacoco/test/html
+          if-no-files-found: ignore
 
   smoke:
     name: docker-compose smoke test

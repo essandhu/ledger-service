@@ -89,7 +89,8 @@ tasks.test {
 // M5: the parallel-writer proof lane — I6 racy, I7, I8 racy, I17 —
 // tag-filtered out of `test` so the fast deterministic lane stays fast, wired into `check` so
 // a plain `./gradlew build` still proves every invariant (per-milestone definition of done).
-// CI runs it as its own required job in parallel with the default lane (`build -x concurrencyTest`).
+// CI runs it as its own required job in parallel with the default lane
+// (`:build -x concurrencyTest`, root-scoped since M8 made the build multi-project).
 val concurrencyTest by tasks.registering(Test::class) {
     description = "Runs the M5 concurrency-proof suite (tag: concurrency)."
     group = "verification"
@@ -117,6 +118,10 @@ val concurrencyTest by tasks.registering(Test::class) {
     // and two PostgreSQL containers SIMULTANEOUSLY on a local `build`, and the stress bounds
     // (an overrun IS an I17 failure) would compete with the whole default lane for CPU.
     mustRunAfter(tasks.test)
+    // M8 re-opened the same vector via the console subproject on a local unqualified `build`;
+    // a task-path string keeps the projects decoupled and is a no-op when the console lane
+    // is not in the execution graph (all the root-scoped CI jobs).
+    mustRunAfter(":console:test")
     // The stress lane runs with the JaCoCo agent OFF: its coverage is unconsumed by design
     // (the gate decision below), so instrumentation would only eat into the bounded hammers.
     configure<JacocoTaskExtension> {

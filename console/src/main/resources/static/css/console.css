@@ -1,0 +1,215 @@
+/* Console styles (M8a). Ledger-paper identity: ruled lines, ink, monospace identifiers.
+   System font stacks only — the console serves everything itself, no font downloads. */
+
+:root {
+  --paper: #fafaf7;
+  --ink: #1a2332;
+  --ink-soft: #525e6e;
+  --rule: #dddad5;
+  --green: #0e6e5c;
+  --green-deep: #0a5346;
+  --chip-bg: #f1f3ee;
+  --mono: ui-monospace, "Cascadia Code", "SF Mono", Menlo, Consolas, monospace;
+  --space-1: 0.375rem;
+  --space-2: 0.75rem;
+  --space-3: 1.25rem;
+  --space-4: 2rem;
+  --space-5: 3.5rem;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font: 16px/1.55 system-ui, "Segoe UI", Roboto, sans-serif;
+}
+
+a,
+button {
+  font: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 2px;
+}
+
+/* ── Top bar ─────────────────────────────────────────────────────────────── */
+
+.topbar {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--rule);
+}
+
+.wordmark {
+  font-family: var(--mono);
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.wordmark .tick {
+  color: var(--green);
+}
+
+.topbar-session {
+  margin-left: auto;
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  font-size: 0.875rem;
+  color: var(--ink-soft);
+}
+
+.topbar-session .whoami-name {
+  font-family: var(--mono);
+  color: var(--ink);
+}
+
+.signout {
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink-soft);
+  padding: var(--space-1) var(--space-2);
+  cursor: pointer;
+  transition: color 120ms ease, border-color 120ms ease;
+}
+
+.signout:hover {
+  color: var(--green-deep);
+  border-color: var(--green);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .signout {
+    transition: none;
+  }
+}
+
+/* ── Identity card ───────────────────────────────────────────────────────── */
+
+main {
+  max-width: 40rem;
+  margin: var(--space-5) auto;
+  padding: 0 var(--space-3);
+}
+
+.identity-card {
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: #fff;
+}
+
+.identity-card header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--rule);
+  font-size: 0.75rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.identity-card header .folio {
+  font-family: var(--mono);
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.identity-body {
+  padding: var(--space-3);
+}
+
+.signed-in-as {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--ink-soft);
+}
+
+.account-line {
+  margin: var(--space-1) 0 0;
+  font-family: var(--mono);
+  font-size: 1.75rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.full-name {
+  margin: var(--space-1) 0 0;
+  color: var(--ink-soft);
+}
+
+/* ── Role chips ──────────────────────────────────────────────────────────── */
+
+.roles {
+  margin-top: var(--space-4);
+}
+
+.roles h2 {
+  margin: 0 0 var(--space-2);
+  font-size: 0.75rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 600;
+}
+
+.chip-row {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.role-chip {
+  font-family: var(--mono);
+  font-size: 0.875rem;
+  color: var(--green-deep);
+  background: var(--chip-bg);
+  border: 1px solid var(--green);
+  border-radius: 6px;
+  padding: var(--space-1) var(--space-2);
+}
+
+/* Composite bundles (CONSOLE_*) are grants-of-grants: stamped outline, no fill —
+   visually distinct from the direct LEDGER_* grants they expand to. */
+.role-chip.bundle {
+  background: transparent;
+  border-style: dashed;
+}
+
+.no-roles {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.875rem;
+}
+
+@media (max-width: 480px) {
+  .topbar {
+    padding: var(--space-2) var(--space-3);
+    flex-wrap: wrap;
+  }
+
+  main {
+    margin-top: var(--space-3);
+  }
+
+  .account-line {
+    font-size: 1.375rem;
+  }
+}

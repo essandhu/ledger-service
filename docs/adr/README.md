@@ -24,6 +24,7 @@ Format: [MADR](https://adr.github.io/madr/)-style, one file per decision, immuta
 | [ADR-0004](ADR-0004-idempotency.md) | Idempotency key design and retention | Accepted |
 | [ADR-0005](ADR-0005-property-testing-tooling.md) | Property-based testing tooling — in-repo harness | Accepted |
 | [ADR-0006](ADR-0006-observability-exposure.md) | Observability exposure — dedicated metrics role, OAuth2 scrape | Accepted |
+| [ADR-0007](ADR-0007-read-only-console.md) | Read-only console — separate OAuth2-client app, server-rendered | Accepted |
 
 ## Future ADR candidates
 
