@@ -20,12 +20,12 @@ import io.github.essandhu.ledger.domain.model.AccountId;
  * join the surrounding transaction, which is precisely what makes the FOR UPDATE locks, the
  * entry insert, and the snapshot bumps one atomic unit (ADR-0002). Micrometer is legal here —
  * the ArchUnit I14 rules keep it out of the application core, so the lock-wait timer lives
- * with the query that does the waiting (PLAN §8).
+ * with the query that does the waiting.
  */
 @Component
 class BalancePersistenceAdapter implements BalanceRepository {
 
-    /** PLAN §8: time spent acquiring the FOR UPDATE locks, measured where the waiting
+    /** The metrics contract: time spent acquiring the FOR UPDATE locks, measured where the waiting
      * happens — under contention this timer, not CPU, is the posting latency story. */
     private static final String LOCK_WAIT = "ledger.posting.lock.wait";
 

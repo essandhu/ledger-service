@@ -12,7 +12,7 @@ import io.github.essandhu.ledger.application.port.in.PostingOutcome;
 /**
  * The one response mapping for all three money-moving endpoints (M4): fresh post → 201 +
  * Location + the body every creating endpoint shares; replay → 200 + the STORED original body
- * verbatim + {@code Idempotency-Replayed: true} (PLAN §5 — no Location: nothing was created
+ * verbatim + {@code Idempotency-Replayed: true} (no Location: nothing was created
  * by THIS request). Exhaustive over the sealed {@link PostingOutcome}.
  */
 final class PostingResponses {

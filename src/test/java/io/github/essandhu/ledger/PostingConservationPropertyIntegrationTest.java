@@ -37,7 +37,7 @@ import io.github.essandhu.ledger.support.property.Property;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * The thin end-to-end property set (TEST-STRATEGY §2.1): generated balanced entry batches
+ * The thin end-to-end property set: generated balanced entry batches
  * posted through the REAL use-case beans — security proxy, transaction, metered decorator,
  * ordered locking, JPA adapter, PostgreSQL — with I4 and I5 re-proven by raw SQL after every
  * batch. The unit-level properties pin the arithmetic; this suite pins that the arithmetic
@@ -45,7 +45,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * wrong snapshot, the very first batch would say so.
  *
  * <p>Scope discipline: the properties quantify ONLY over this test's own marker accounts
- * (shared context, TEST-STRATEGY §2) — every generated entry touches only the pool, so
+ * (shared context) — every generated entry touches only the pool, so
  * per-currency zero over the pool's postings IS global conservation restricted to the rows
  * this test may quantify over. Pool accounts allow negative balances on purpose: I6 rejection
  * is someone else's proof; conservation must not flake on an overdraft.
@@ -61,7 +61,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class PostingConservationPropertyIntegrationTest {
 
     /** ADR-0005's default is 200 — right for pure-domain properties, hostile for ones that
-     * round-trip PostgreSQL per iteration. TEST-STRATEGY §2.1 calls this set "thin": N=25. */
+     * round-trip PostgreSQL per iteration. This set is deliberately "thin": N=25. */
     private static final String REDUCED_ITERATIONS = "25";
 
     private static final String CREATED_BY = "conservation-property";
@@ -111,7 +111,7 @@ class PostingConservationPropertyIntegrationTest {
     }
 
     /** Three allow-negative accounts per currency, types cycled — JPY (exponent 0) and BHD
-     * (exponent 3) included so no two-decimal assumption survives (TEST-STRATEGY §2.2). */
+     * (exponent 3) included so no two-decimal assumption survives. */
     private Map<CurrencyCode, List<AccountId>> createPools() {
         Map<CurrencyCode, List<AccountId>> pools = new LinkedHashMap<>();
         AccountType[] types = AccountType.values();
@@ -132,7 +132,7 @@ class PostingConservationPropertyIntegrationTest {
     /**
      * {@code Gens.balancedLegs}' construction — k−1 random nonzero legs plus the closing leg,
      * nudged if the closing leg would be zero — but drawing accounts from the REAL pool of the
-     * leg's currency (an account holds exactly one currency, PLAN §4.1), so every generated
+     * leg's currency (an account holds exactly one currency), so every generated
      * draft is postable and conservation is the only thing on trial.
      */
     private static Gen<List<EntryDraft.Leg>> balancedLegsOver(Map<CurrencyCode, List<AccountId>> pools) {

@@ -45,13 +45,13 @@ import io.github.essandhu.ledger.domain.model.JournalEntry;
 import io.github.essandhu.ledger.domain.model.PostingId;
 
 /**
- * The posting engine (PLAN §6): one class, ONE critical section. Every
+ * The posting engine: one class, ONE critical section. Every
  * money-moving flow — journal, transfer, reversal — funnels through {@link #postUnderLock},
  * which implements ADR-0003 §Decision verbatim: validate the draft with no I/O, lock the
  * balance snapshots of every touched account in canonical order, decide everything
  * account-dependent under those locks, then write. Registered by config wiring, not component
  * scanning; {@code @Transactional} and {@code @PreAuthorize} (I13's method-security layer,
- * LEDGER_WRITE on the money movers per PLAN §5) are its only Spring surface (I14).
+ * LEDGER_WRITE on the money movers per the API contract) are its only Spring surface (I14).
  *
  * <p>Because the single lock site orders ids canonically and nothing else in the application
  * takes these locks out of order, no interleaving can deadlock — rejected requests fail with a
@@ -129,7 +129,7 @@ public class PostingService implements PostJournalEntryUseCase, TransferFundsUse
         if (settled.isPresent()) {
             return settled.get();
         }
-        // PLAN §5, literally: source = DEBIT = +amount, target = CREDIT = −amount. One Money,
+        // The API contract, literally: source = DEBIT = +amount, target = CREDIT = −amount. One Money,
         // so the pair balances by construction. negateExact has no answer for Long.MIN_VALUE
         // — translated here, at the accumulation point, per the Money javadoc's contract.
         EntryDraft.Leg sourceLeg = new EntryDraft.Leg(command.source(), command.amount());
@@ -157,7 +157,7 @@ public class PostingService implements PostJournalEntryUseCase, TransferFundsUse
         if (settled.isPresent()) {
             return settled.get();
         }
-        // The original's id is a PATH id, so a miss is the 404 EntryNotFound (PLAN §5) — the
+        // The original's id is a PATH id, so a miss is the 404 EntryNotFound — the
         // one pre-lock read of this flow, and deliberately not a status read: immutable rows
         // cannot go stale (I3).
         JournalEntry original = journal.findById(command.originalId())
@@ -361,7 +361,7 @@ public class PostingService implements PostJournalEntryUseCase, TransferFundsUse
         }
 
         // Step 6: posted_at read from the injected Clock UNDER the lock, then clamped
-        // strictly above every touched account's last posted_at (PLAN §4.6): per-account
+        // strictly above every touched account's last posted_at: per-account
         // posted_at order equals commit order BY CONSTRUCTION, not by trusting the wall
         // clock. A backwards step (NTP correction, VM resume — the threat MonotoneUuidClock
         // already guards ids against) would otherwise let a later-committed posting sort

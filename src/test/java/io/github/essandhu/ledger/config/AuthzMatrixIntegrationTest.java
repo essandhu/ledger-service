@@ -26,12 +26,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 
 /**
- * I13: the full endpoint × principal matrix (PLAN §5), as ONE data table so every milestone
+ * I13: the full endpoint × principal matrix, as ONE data table so every milestone
  * appends rows. Principals: no token → 401; authenticated without the required role → 403 —
  * including a valid token with zero LEDGER roles. Since M2, LEDGER_WRITE guards the money
  * movers (journal entries, transfers, reversals) and nothing else. There is deliberately no
  * role hierarchy: ADMIN does NOT imply READ (composite roles in Keycloak are where convenience
- * bundles belong, PLAN §7) — so ADMIN-on-GET is a 403 cell, not a convenience 200, and
+ * bundles belong) — so ADMIN-on-GET is a 403 cell, not a convenience 200, and
  * ADMIN-on-POST-entry likewise.
  *
  * <p>Tokens carry raw {@code realm_access} claims and run through the production
@@ -162,7 +162,7 @@ class AuthzMatrixIntegrationTest {
                 new Cell("PATCH", "EXISTING", "LEDGER_WRITE", 403),
                 new Cell("PATCH", "EXISTING", "LEDGER_ADMIN", 200),
 
-                // ── M2 money movers (PLAN §5): LEDGER_WRITE only — no hierarchy, ADMIN 403.
+                // ── M2 money movers: LEDGER_WRITE only — no hierarchy, ADMIN 403.
                 // Right-role POST cells use an invalid body {} → 400 (access proven without
                 // creating rows, same trick as POST /accounts above). Since M4 these cells
                 // are doubly 400: the Idempotency-Key header is required and absent here —
@@ -199,11 +199,11 @@ class AuthzMatrixIntegrationTest {
                 new Cell("HEAD", "ENTRY", NO_ROLES, 403),
                 new Cell("HEAD", "ENTRY", "LEDGER_READ", 200),
 
-                // PLAN §5 defines no journal-entries collection endpoint (statements are read
+                // The API contract defines no journal-entries collection endpoint (statements are read
                 // per account) — the namespace backstop holds it, even for LEDGER_READ.
                 new Cell("GET", "/api/v1/journal-entries", "LEDGER_READ", 403),
 
-                // ── M3 balance & statement reads (PLAN §5): LEDGER_READ only — the extra
+                // ── M3 balance & statement reads: LEDGER_READ only — the extra
                 // path segment means the /accounts/* matchers do NOT cover these; each has
                 // its own explicit GET and HEAD rules, and this is the proof they exist.
                 new Cell("GET", "BALANCE", NONE, 401),
@@ -222,7 +222,7 @@ class AuthzMatrixIntegrationTest {
                 new Cell("HEAD", "POSTINGS", NO_ROLES, 403),
                 new Cell("HEAD", "POSTINGS", "LEDGER_READ", 200),
 
-                // ── M6 reconciliation (PLAN §5): the trigger is LEDGER_ADMIN only; run and
+                // ── M6 reconciliation: the trigger is LEDGER_ADMIN only; run and
                 // findings reads are LEDGER_READ like every other read — no hierarchy, so the
                 // ADMIN that triggers cannot read back without READ. The right-role POST runs
                 // a real sweep: there is no body to invalidate, and a sweep is additive-safe
@@ -251,7 +251,7 @@ class AuthzMatrixIntegrationTest {
                 new Cell("HEAD", "RUN_FINDINGS", NO_ROLES, 403),
                 new Cell("HEAD", "RUN_FINDINGS", "LEDGER_READ", 200),
 
-                // PLAN §5 defines no reconciliation-runs collection listing — the namespace
+                // The API contract defines no reconciliation-runs collection listing — the namespace
                 // backstop holds it, even for LEDGER_READ (the journal-entries precedent).
                 new Cell("GET", "/api/v1/reconciliation-runs", "LEDGER_READ", 403),
 
@@ -308,7 +308,7 @@ class AuthzMatrixIntegrationTest {
         MvcTestResult result = request.exchange();
         assertThat(result).hasStatus(cell.expected());
         if (cell.expected() == 401 || cell.expected() == 403) {
-            // PLAN §5: errors are RFC 9457 — including the security layer's, which by Spring
+            // The API contract: errors are RFC 9457 — including the security layer's, which by Spring
             // default would be empty bodies. The WWW-Authenticate convention is kept alongside.
             assertThat(result).hasContentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON);
             if (cell.expected() == 401) {

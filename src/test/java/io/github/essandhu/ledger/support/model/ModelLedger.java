@@ -155,7 +155,7 @@ public final class ModelLedger {
     public Verdict updateStatus(AccountId id, AccountStatus target) {
         ModelAccount account = account(id);
         if (account.status == target) {
-            return Verdict.ACCEPTED; // declarative no-op, nothing persisted (PLAN §5)
+            return Verdict.ACCEPTED; // declarative no-op, nothing persisted
         }
         if (account.status == AccountStatus.CLOSED) {
             return Verdict.rejected(InvalidStatusTransition.class);
@@ -217,7 +217,7 @@ public final class ModelLedger {
         return Verdict.ACCEPTED;
     }
 
-    /** Test-visible helper mirroring the transfer expansion (PLAN §5: source = DEBIT
+    /** Test-visible helper mirroring the transfer expansion (source = DEBIT
      * {@code +amount}, target = CREDIT {@code −amount}, one Money each way). */
     public static List<EntryDraft.Leg> transferLegs(AccountId source, AccountId target,
             Money amount) {

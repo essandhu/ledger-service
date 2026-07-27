@@ -9,8 +9,8 @@ import io.github.essandhu.ledger.application.port.in.BalanceView;
 import io.github.essandhu.ledger.domain.model.AccountType;
 
 /**
- * Wire shape of the balance endpoint (PLAN §5, pinned at M3). {@code balance} is the NATURAL
- * figure — raw × direction(type), PLAN §4.2's "shown to clients" — and leads; {@code
+ * Wire shape of the balance endpoint (pinned at M3). {@code balance} is the NATURAL
+ * figure — raw × direction(type), the sign convention's "shown to clients" — and leads; {@code
  * rawBalance} rides along so a statement walk (whose lines carry raw signed amounts) can be
  * reconciled against it, and {@code postingCount} says how many lines that walk should visit.
  * {@code asOf} is PRESENT exactly when the figure was derived from postings at that instant

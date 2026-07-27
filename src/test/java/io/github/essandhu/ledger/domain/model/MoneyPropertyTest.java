@@ -20,7 +20,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * {@code Long.MAX_VALUE}/{@code MIN_VALUE} throwing {@link ArithmeticException} — never
  * wrapping. {@code MoneyTest} pins each law on examples; this suite universally quantifies them
  * through the in-repo harness (ADR-0005), with JPY (exponent 0) and BHD (exponent 3) always in
- * the currency mix so no law accidentally leans on "two decimal places" (TEST-STRATEGY §2.2).
+ * the currency mix so no law accidentally leans on "two decimal places".
  *
  * <p>The algebraic laws run over amounts bounded to {@code Long.MAX_VALUE / 4} — "arbitrary
  * in-range amounts" in the ADR's words — because a law about sums needs representable sums;

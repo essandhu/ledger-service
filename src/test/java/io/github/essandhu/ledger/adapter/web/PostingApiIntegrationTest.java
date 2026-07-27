@@ -35,7 +35,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 
 /**
- * The posting HTTP surface (PLAN §5) against real PostgreSQL: journal entries, transfers,
+ * The posting HTTP surface against real PostgreSQL: journal entries, transfers,
  * reads, and every 422 rejection reason with its pinned problem type URI — except
  * {@code entry-already-reversed} (proven with the rest of I11 in
  * {@link ReversalApiIntegrationTest}) and {@code account-balance-not-zero} (the close use
@@ -77,7 +77,7 @@ class PostingApiIntegrationTest {
         return role("LEDGER_READ");
     }
 
-    /** LEDGER_WRITE with a chosen JWT subject — the subject becomes created_by (PLAN §7). */
+    /** LEDGER_WRITE with a chosen JWT subject — the subject becomes created_by. */
     private static RequestPostProcessor writer(String subject) {
         return jwt().jwt(j -> j.subject(subject)
                         .claim("realm_access", of("roles", List.of("LEDGER_WRITE"))))
@@ -87,7 +87,7 @@ class PostingApiIntegrationTest {
     /**
      * LEDGER_WRITE whose JWT carries NO {@code sub} claim — legal per RFC 7519 (sub is
      * optional), mintable by a misconfigured issuer, and unusable here: created_by requires a
-     * subject (PLAN §7). The mock-JWT route deliberately bypasses the decoder, so this exercises
+     * subject. The mock-JWT route deliberately bypasses the decoder, so this exercises
      * the controller-level guard — the only layer these tests can prove.
      */
     private static RequestPostProcessor subjectlessWriter() {
@@ -238,7 +238,7 @@ class PostingApiIntegrationTest {
     /**
      * I5 scoped additively: every entry this test creates touches ONLY its own marker accounts,
      * so per-currency zero over their postings is exactly global conservation restricted to the
-     * rows this test is entitled to quantify over (TEST-STRATEGY §2).
+     * rows this test is entitled to quantify over.
      */
     private void assertI5(List<String> accountIds) throws SQLException {
         try (Connection connection = dataSource.getConnection();
@@ -290,7 +290,7 @@ class PostingApiIntegrationTest {
         @DisplayName("multi-leg JPY journal: 201, Location, full response shape, I4/I5 hold")
         void multi_leg_jpy_journal_posts_and_reads_back() throws SQLException {
             String subject = subject();
-            // JPY (exponent 0) on purpose: minor units are exponent-blind (TEST-STRATEGY §2.2).
+            // JPY (exponent 0) on purpose: minor units are exponent-blind.
             String a = createAccount(marker("jpy-a"), "JPY", "ASSET", false);
             String b = createAccount(marker("jpy-b"), "JPY", "EXPENSE", false);
             String c = createAccount(marker("jpy-c"), "JPY", "LIABILITY", true);
@@ -348,7 +348,7 @@ class PostingApiIntegrationTest {
         }
 
         @Test
-        @DisplayName("transfer signs are PLAN §5 verbatim: source leg = +amount (debit), target leg = −amount (credit)")
+        @DisplayName("transfer signs are the API contract, verbatim: source leg = +amount (debit), target leg = −amount (credit)")
         void transfer_posts_with_pinned_signs() throws SQLException {
             String subject = subject();
             String source = createAccount(marker("tr-src"), "EUR", "ASSET", false);
@@ -612,7 +612,7 @@ class PostingApiIntegrationTest {
                         .hasStatus(HttpStatus.BAD_REQUEST)
                         .hasContentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON);
             }
-            // PLAN §5 pins the transfer roles by sign — zero and negative amounts are shape
+            // The API contract pins the transfer roles by sign — zero and negative amounts are shape
             // errors (a negative amount would merely express role confusion).
             for (long amount : List.of(0L, -100L)) {
                 assertThat(postTransfer(subject, transfer(a, b, amount, "EUR")))
@@ -661,7 +661,7 @@ class PostingApiIntegrationTest {
     class SubjectlessToken {
 
         @Test
-        @DisplayName("PLAN §7: a sub-less JWT is 401 on all three write endpoints — defective credential, nothing written")
+        @DisplayName("The auth model: a sub-less JWT is 401 on all three write endpoints — defective credential, nothing written")
         void subjectless_token_is_401_on_every_write_endpoint() throws SQLException {
             String a = createAccount(marker("nosub-a"), "EUR", "ASSET", false);
             String b = createAccount(marker("nosub-b"), "EUR", "ASSET", true);
@@ -701,7 +701,7 @@ class PostingApiIntegrationTest {
     }
 
     @Nested
-    @DisplayName("PLAN §8: posting metrics through the config decorator")
+    @DisplayName("The metrics contract: posting metrics through the config decorator")
     class Metrics {
 
         private long timerCount(String entryType, String outcome) {

@@ -5,10 +5,10 @@ import java.util.Objects;
 import io.github.essandhu.ledger.domain.model.EntryId;
 
 /**
- * POST /journal-entries/{id}/reversal (PLAN §5): post the entry whose legs exactly negate
+ * POST /journal-entries/{id}/reversal: post the entry whose legs exactly negate
  * {@code originalId}'s (I11). A reversal is a new entry through the full posting protocol —
  * draft validation, ordered locks, status and overdraft checks (which is why reversing into a
- * FROZEN account fails, the documented operational caveat of PLAN §4.5) — plus the
+ * FROZEN account fails, the documented operational caveat of the lifecycle rules) — plus the
  * at-most-once check evaluated inside the locked section ({@code EntryAlreadyReversed}).
  *
  * <p>M4: carries the {@code Idempotency-Key} and returns {@link PostingOutcome} (ADR-0004) —

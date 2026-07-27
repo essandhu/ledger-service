@@ -34,7 +34,7 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 
 /**
  * I12, posting half, over HTTP: FROZEN and CLOSED accounts reject postings in BOTH directions
- * (a leg in either sign, PLAN §4.5); closing requires natural balance zero, judged under the
+ * (a leg in either sign); closing requires natural balance zero, judged under the
  * SAME account_balance lock the posting path holds (ADR-0003) — so the close-vs-post race has
  * exactly two legal outcomes and no third: either the transfer commits first and the close
  * rejects with {@code account-balance-not-zero}, or the close commits first and the transfer

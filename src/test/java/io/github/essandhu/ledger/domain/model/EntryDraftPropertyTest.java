@@ -26,7 +26,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * everything; only together do they pin "sums to exactly zero per currency". Rejection asserts
  * the exact integer residual, delta ±1 drawn prominently: one minor unit off must reject,
  * because an epsilon in a ledger is an admission of imbalance (ADR-0001). JPY (exponent 0) and
- * BHD (exponent 3) flow through every generator by construction (TEST-STRATEGY §2.2), so no
+ * BHD (exponent 3) flow through every generator by construction, so no
  * hidden two-decimal assumption can survive these runs.
  */
 @Tag("property")

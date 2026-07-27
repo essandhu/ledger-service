@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.RestController;
 import io.github.essandhu.ledger.application.port.in.GetBalanceQuery;
 import io.github.essandhu.ledger.domain.model.AccountId;
 
-/** The balance read surface (PLAN §5, M3). Thin: param ↔ query mapping only. */
+/** The balance read surface (M3). Thin: param ↔ query mapping only. */
 @RestController
 @RequestMapping("/api/v1/accounts/{id}/balance")
 class BalanceController {
@@ -26,7 +26,7 @@ class BalanceController {
 
     /**
      * {@code ?at=} takes an ISO-8601 UTC instant — the {@code Z} form is the wire contract
-     * (PLAN §5, pinned at M3); offset forms are uncontracted (a raw {@code '+'} is
+     * (pinned at M3); offset forms are uncontracted (a raw {@code '+'} is
      * servlet-decoded to a space and rejected 400). The response's {@code asOf} is the parsed
      * instant normalized by {@link WireInstants} (floored to the microsecond grid — exact
      * against grid data), not the literal parameter text. Without {@code at}: the live

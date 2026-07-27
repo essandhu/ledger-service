@@ -4,7 +4,7 @@ import java.util.List;
 
 import io.github.essandhu.ledger.application.port.in.AccountPage;
 
-/** Offset-pagination envelope for GET /accounts (PLAN §5). */
+/** Offset-pagination envelope for GET /accounts. */
 record AccountPageResponse(List<AccountResponse> content, int page, int size, long totalElements) {
 
     static AccountPageResponse from(AccountPage accountPage) {

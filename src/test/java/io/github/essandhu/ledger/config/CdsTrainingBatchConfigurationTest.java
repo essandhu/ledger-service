@@ -9,7 +9,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * The cds-training configuration exists for exactly one {@code RUN} line in the Dockerfile and
- * must NEVER activate anywhere else (TEST-STRATEGY M7 landing): it swaps Batch to a
+ * must NEVER activate anywhere else (M7): it swaps Batch to a
  * resourceless JobRepository, which would invalidate every Batch-metadata proof if it leaked
  * into a served or tested context. This pins the two facts that make it safe and useful.
  */

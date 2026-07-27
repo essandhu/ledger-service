@@ -12,7 +12,7 @@ import io.github.essandhu.ledger.support.concurrent.StressRunner;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * I17 — deadlock freedom (TEST-STRATEGY §4, workload b): sustained bidirectional transfers,
+ * I17 — deadlock freedom (workload b): sustained bidirectional transfers,
  * A→B and B→A simultaneously at randomized amounts — the opposing-direction traffic that
  * deadlocks any implementation acquiring locks in request order. A victim abort (SQLSTATE
  * 40P01 after {@code deadlock_timeout}) surfaces as a 500 that the honesty rule fails loudly,
@@ -28,10 +28,10 @@ import static org.assertj.core.api.Assertions.assertThat;
  * where they can be seen: the unit fake rejects unsorted callers, and the M5 lock-order
  * property pins the query's returned order for arbitrary inputs.
  *
- * <p>Afterwards, the §4 state checks: conservation across the pair (I5 — the two snapshots sum
+ * <p>Afterwards, the state checks: conservation across the pair (I5 — the two snapshots sum
  * to zero, as does Σ over all their postings), snapshot-equals-history for each account (I4),
- * and the PLAN §9 lock metric — the hammer's acquisitions all landed samples in
- * {@code ledger.posting.lock.wait}, the queue PLAN §8 promises makes contention measurable.
+ * and the lock metric — the hammer's acquisitions all landed samples in
+ * {@code ledger.posting.lock.wait}, the queue that makes contention measurable.
  */
 @DisplayName("I17: bidirectional transfer hammering completes deadlock-free, conserving to zero")
 class BidirectionalTransferConcurrencyTest extends ConcurrencyTestSupport {
@@ -50,7 +50,7 @@ class BidirectionalTransferConcurrencyTest extends ConcurrencyTestSupport {
         // Even workers push A→B, odd workers B→A — the opposing directions that deadlock
         // without the canonical sort. Amounts are drawn from a per-worker seeded rng: varied
         // like production traffic, deterministic per worker (the INTERLEAVING is the random
-        // element under test; TEST-STRATEGY §1's replay discipline governs generation, and
+        // element under test; the test ground rules' replay discipline governs generation, and
         // thread schedules are inherently unreplayable — the invariant must hold for ALL of
         // them, which is exactly what makes this a hammer rather than a property).
         // Each worker returns its net contribution to A's raw balance (+x for A→B's source
@@ -95,8 +95,8 @@ class BidirectionalTransferConcurrencyTest extends ConcurrencyTestSupport {
         assertSnapshotEqualsPostings(a);
         assertSnapshotEqualsPostings(b);
 
-        // PLAN §9 M5 'lock metrics': contention was MEASURED, not just survived (PLAN §8's
-        // promise that hot-account queueing is observable); monotone >= — shared registry.
+        // M5 'lock metrics': contention was MEASURED, not just survived (the metrics
+        // contract's promise that hot-account queueing is observable); monotone >= — shared registry.
         assertThat(lockWaitCount())
                 .as("ledger.posting.lock.wait recorded a sample per posting under the hammer")
                 .isGreaterThanOrEqualTo(lockWaitsBefore + expectedEntries);

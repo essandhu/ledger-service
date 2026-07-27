@@ -8,9 +8,9 @@ import io.github.essandhu.ledger.domain.model.EntryType;
 import io.github.essandhu.ledger.domain.model.JournalEntry;
 
 /**
- * Journal-entry representation (PLAN §5), shared by all three creating endpoints and the GET —
+ * Journal-entry representation, shared by all three creating endpoints and the GET —
  * a posted fact is one shape however it came to exist. {@code reversalOf} is null except on
- * REVERSAL entries (I11); {@code createdBy} is the JWT subject that posted it (PLAN §7); legs
+ * REVERSAL entries (I11); {@code createdBy} is the JWT subject that posted it; legs
  * keep their submitted order (I11's exactness proof compares positionally).
  */
 record EntryResponse(

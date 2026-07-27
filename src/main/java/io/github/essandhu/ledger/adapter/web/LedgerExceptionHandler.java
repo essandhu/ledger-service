@@ -36,7 +36,7 @@ import io.github.essandhu.ledger.domain.error.UnknownPostingAccount;
 import io.github.essandhu.ledger.domain.error.ZeroAmountPosting;
 
 /**
- * RFC 9457 mappings (PLAN §5). The status split: 400 = the request itself can never be valid
+ * RFC 9457 mappings. The status split: 400 = the request itself can never be valid
  * (malformed body, bad enum, invalid currency); 401 = the credential is defective (a bearer
  * token without a subject — {@link MissingTokenSubject}); 422 = well-formed but rejected by a
  * business rule, each rule with its pinned {@link ProblemTypes} URI; 404 = path-addressed
@@ -102,7 +102,7 @@ class LedgerExceptionHandler extends ResponseEntityExceptionHandler {
         return problem;
     }
 
-    // ── M2 posting rejections (PLAN §5) — slug = metric reason tag (PLAN §8) ───────────────
+    // ── M2 posting rejections — slug = metric reason tag ───────────────
 
     @ExceptionHandler(UnbalancedEntry.class)
     ProblemDetail unbalancedEntry(UnbalancedEntry exception) {

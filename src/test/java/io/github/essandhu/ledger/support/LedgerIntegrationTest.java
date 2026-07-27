@@ -17,7 +17,7 @@ import org.springframework.context.annotation.Import;
  * matters, not just convenience: the Spring TestContext cache keys on the merged context
  * configuration, so any class that hand-rolls a slightly different set silently forks a second
  * context — and a second PostgreSQL container — invalidating the one-context/one-container
- * economics recorded in {@link PostgresContainerConfig} (TEST-STRATEGY §2).
+ * economics recorded in {@link PostgresContainerConfig}.
  */
 @Target(ElementType.TYPE)
 @Retention(RetentionPolicy.RUNTIME)

@@ -6,7 +6,7 @@ import io.github.essandhu.ledger.application.port.in.StatementPage;
 import io.github.essandhu.ledger.domain.model.AccountId;
 
 /**
- * The statement page envelope (PLAN §5, pinned at M3). {@code nextCursor} is ALWAYS the
+ * The statement page envelope (pinned at M3). {@code nextCursor} is ALWAYS the
  * position to poll next — opaque and account-bound: the last line's position when the page
  * has content, the request's own cursor when it does not (tail-following is stateless: just
  * re-send what the last response handed back), and null only when a cursor-less request found

@@ -96,7 +96,7 @@ public final class CanonicalCommand {
     }
 
     /** Lowercase-hex SHA-256 over the canonical form's UTF-8 bytes — the 64-char
-     * {@code request_hash} of PLAN §4.3. */
+     * {@code request_hash} of the schema. */
     public static String sha256Hex(String canonicalJson) {
         MessageDigest digest;
         try {

@@ -1,4 +1,4 @@
-# Single source of truth for dependency versions (PLAN.md §2).
+# Single source of truth for dependency versions.
 # Everything Spring-Boot-BOM-managed is intentionally NOT listed here — the BOM
 # (spring-boot-dependencies 4.1.0) pins it; declaring it again would invite drift.
 # Verified current as of 2026-07-22; Renovate keeps this file honest afterwards.

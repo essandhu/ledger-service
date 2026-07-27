@@ -12,7 +12,7 @@ import io.github.essandhu.ledger.adapter.web.ProblemTypes;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * The one-vocabulary contract (PLAN §8, pinned by the ProblemTypes javadoc): the {@code reason}
+ * The one-vocabulary contract (pinned by the ProblemTypes javadoc): the {@code reason}
  * tag on {@code ledger.posting.rejected} IS the problem-type slug, so a dashboard series and a
  * client's problem document dereference the same name. The decorator hand-duplicates those
  * strings in its REASONS map — this test is what stops the duplication from drifting: it
@@ -21,11 +21,11 @@ import static org.assertj.core.api.Assertions.assertThat;
  * Lives in the config package deliberately: MeteredPostingUseCases is package-private, and the
  * proof needs to read its map, not weaken its encapsulation.
  */
-@DisplayName("PLAN §8: the rejected-counter reason tags ARE the ProblemTypes posting slugs — one vocabulary")
+@DisplayName("The metrics contract: the rejected-counter reason tags ARE the ProblemTypes posting slugs — one vocabulary")
 class MeteredPostingUseCasesTest {
 
     /**
-     * The exact posting-rejection family (PLAN §5): every 422 the three money-moving ports can
+     * The exact posting-rejection family: every 422 the three money-moving ports can
      * raise, each with its pinned type URI. ACCOUNT_CLOSED is the M1 constant that joined the
      * family unchanged; ACCOUNT_BALANCE_NOT_ZERO is deliberately NOT here — see below.
      */
@@ -79,10 +79,10 @@ class MeteredPostingUseCasesTest {
     }
 
     @Test
-    @DisplayName("M4: idempotency-key-conflict is deliberately absent too — conflicts have their own counter (PLAN §8)")
+    @DisplayName("M4: idempotency-key-conflict is deliberately absent too — conflicts have their own counter")
     void idempotency_conflict_is_deliberately_absent_from_the_posting_vocabulary() {
         // Same exclusion posture as the close rejection: a key conflict is not a posting
-        // rejection — nothing was validated, locked, or judged. PLAN §8 gives it the
+        // rejection — nothing was validated, locked, or judged. The metrics contract gives it the
         // dedicated ledger.idempotency.conflict counter; adding the slug (and the class) to
         // REASONS would double-count every conflict across two series.
         assertThat(MeteredPostingUseCases.REASONS.values())

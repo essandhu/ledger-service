@@ -19,7 +19,7 @@ import io.github.essandhu.ledger.application.service.ReconciliationRunService;
  * The job's record-keeper and reporter: opens the RUNNING row before the sweep, and afterwards
  * either closes it with a verdict (delegating the decision to the core's
  * {@link ReconciliationRunService}) or stamps it FAILED. Metrics live here with the listener
- * that observes the outcomes (PLAN §8's placement rule — the application core stays
+ * that observes the outcomes (the metrics contract's placement rule — the application core stays
  * Micrometer-free): the {@code ledger.reconciliation.runs} counter tags the outcome, the
  * {@code .duration} timer records completed sweeps only — a FAILED run discards its sample,
  * the posting-duration discipline — and the drift gauges are overwritten per completed run.

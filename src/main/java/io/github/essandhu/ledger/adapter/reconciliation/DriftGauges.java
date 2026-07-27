@@ -5,7 +5,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import io.micrometer.core.instrument.MeterRegistry;
 
 /**
- * The PLAN §8 drift gauges — {@code ledger.reconciliation.drift.accounts} and
+ * The the metrics contract drift gauges — {@code ledger.reconciliation.drift.accounts} and
  * {@code .drift.absolute} — as "at last completed run" state: the job listener overwrites both
  * after every CLEAN/DRIFT run; a FAILED run leaves them, because a sweep that produced no
  * verdict has nothing truer to report than the last one that did. The codebase's first gauges,

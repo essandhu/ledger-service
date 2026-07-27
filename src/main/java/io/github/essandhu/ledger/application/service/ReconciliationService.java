@@ -17,7 +17,7 @@ import io.github.essandhu.ledger.application.port.out.ReconciliationRun;
 import io.github.essandhu.ledger.application.port.out.ReconciliationTrigger;
 
 /**
- * The caller-facing reconciliation use cases (PLAN §5, M6): trigger a sweep, read a run, list
+ * The caller-facing reconciliation use cases (M6): trigger a sweep, read a run, list
  * its findings. The sweep itself — chunking, comparisons, findings, the run record — happens
  * behind {@link ReconciliationTrigger} (the Batch adapter) and
  * {@link ReconciliationRunService} (the job's record-keeper); this service is deliberately

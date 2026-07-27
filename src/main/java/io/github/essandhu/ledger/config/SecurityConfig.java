@@ -12,8 +12,8 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 import org.springframework.security.web.SecurityFilterChain;
 
 /**
- * Pure OAuth2 resource server (PLAN §7). I13's first layer: request-matcher rules per the
- * PLAN §5 role table — one role per endpoint, deliberately NO role hierarchy (ADMIN does not
+ * Pure OAuth2 resource server. I13's first layer: request-matcher rules per the
+ * The API contract role table — one role per endpoint, deliberately NO role hierarchy (ADMIN does not
  * imply READ; convenience bundles belong in Keycloak composite roles, keeping this server a
  * literal transcription of the table). The second layer is {@code @PreAuthorize} on the
  * use-case methods, enabled here.
@@ -47,7 +47,7 @@ class SecurityConfig {
                         .hasRole("LEDGER_READ")
                         .requestMatchers(HttpMethod.HEAD, "/api/v1/accounts", "/api/v1/accounts/*")
                         .hasRole("LEDGER_READ")
-                        // M3 balance/statement reads (PLAN §5): their extra path segment means
+                        // M3 balance/statement reads: their extra path segment means
                         // the single-segment /api/v1/accounts/* matchers above do NOT cover
                         // them — each gets its own explicit GET and HEAD rules.
                         .requestMatchers(HttpMethod.GET,
@@ -58,7 +58,7 @@ class SecurityConfig {
                                 "/api/v1/accounts/*/balance",
                                 "/api/v1/accounts/*/postings")
                         .hasRole("LEDGER_READ")
-                        // M2 money movers (PLAN §5): one role, LEDGER_WRITE — no hierarchy, so
+                        // M2 money movers: one role, LEDGER_WRITE — no hierarchy, so
                         // ADMIN posts nothing and WRITE reads nothing.
                         .requestMatchers(HttpMethod.POST,
                                 "/api/v1/journal-entries",
@@ -66,14 +66,14 @@ class SecurityConfig {
                                 "/api/v1/transfers")
                         .hasRole("LEDGER_WRITE")
                         // HEAD listed explicitly, same reason as the account matchers above.
-                        // Only the item GET exists — PLAN §5 defines no journal-entries
+                        // Only the item GET exists — the API contract defines no journal-entries
                         // collection endpoint, so GET /api/v1/journal-entries stays on the
                         // backstop below (statements are read per account, M3).
                         .requestMatchers(HttpMethod.GET, "/api/v1/journal-entries/*")
                         .hasRole("LEDGER_READ")
                         .requestMatchers(HttpMethod.HEAD, "/api/v1/journal-entries/*")
                         .hasRole("LEDGER_READ")
-                        // M6 reconciliation (PLAN §5): the trigger is account-POST-shaped
+                        // M6 reconciliation: the trigger is account-POST-shaped
                         // (ADMIN); the run and findings reads are LEDGER_READ like every other
                         // read — no hierarchy, so ADMIN triggers but cannot read back without
                         // the READ role (composite roles in Keycloak are the convenience path).

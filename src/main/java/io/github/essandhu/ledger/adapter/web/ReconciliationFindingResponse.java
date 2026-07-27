@@ -4,7 +4,7 @@ import java.util.UUID;
 
 import io.github.essandhu.ledger.application.port.out.ReconciliationFinding;
 
-/** One drifted account on the wire (PLAN §5, M6): both pairs and the delta, verbatim raw
+/** One drifted account on the wire (M6): both pairs and the delta, verbatim raw
  * signed minor units — the statement-line posture, no natural-sign interpretation here. */
 record ReconciliationFindingResponse(
         UUID id,

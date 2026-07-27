@@ -68,7 +68,7 @@ public class ReconciliationRunService {
 
     /**
      * What {@link #closeRun} recorded, for the listener that reports it: the verdict feeds the
-     * {@code ledger.reconciliation.runs} outcome tag, the drift figures feed the PLAN §8
+     * {@code ledger.reconciliation.runs} outcome tag, the drift figures feed the metrics contract
      * gauges.
      */
     public record Closed(ReconciliationRun.Status verdict, ReconciliationRun.Results results,

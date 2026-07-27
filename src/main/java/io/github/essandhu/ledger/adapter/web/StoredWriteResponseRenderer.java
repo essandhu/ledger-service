@@ -14,8 +14,8 @@ import io.github.essandhu.ledger.domain.model.JournalEntry;
  * returns those bytes verbatim. A driven-port implementation living in the web adapter on
  * purpose: what "the response" looks like is a web concern, and this is the one place that
  * knows it; the application core just asks for "exactly what the client saw". The 201 is
- * {@code PostingResponses}' fresh-post status, recorded as audit data (replays answer 200,
- * PLAN §5).
+ * {@code PostingResponses}' fresh-post status, recorded as audit data (replays answer 200 per
+ * the API contract).
  */
 @Component
 class StoredWriteResponseRenderer implements WriteResponseRenderer {

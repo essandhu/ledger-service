@@ -19,7 +19,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 
 /**
- * The reconciliation read surface's error contract (PLAN §5, M6): path-addressed misses are
+ * The reconciliation read surface's error contract (M6): path-addressed misses are
  * bare 404 problems (the account/entry doctrine), malformed ids and out-of-bounds paging are
  * bare 400s. The happy paths live with the I15 proof
  * ({@code ReconciliationJobIntegrationTest}); this class pins the edges.

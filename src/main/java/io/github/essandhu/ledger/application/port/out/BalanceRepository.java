@@ -55,7 +55,7 @@ public interface BalanceRepository {
     List<AccountBalance> lockBalances(List<AccountId> idsInCanonicalOrder);
 
     /**
-     * Lock-free point read of the current snapshot row — PLAN §5's O(1) balance endpoint
+     * Lock-free point read of the current snapshot row — the API contract's O(1) balance endpoint
      * (M3). Deliberately NOT {@link #lockBalances}: this read takes NO lock, so the
      * single-lock-site property above stays intact and a read-only query never queues behind
      * (or ahead of) the posting path. Empty means "no such account" — every real account has
@@ -69,7 +69,7 @@ public interface BalanceRepository {
      * — never an entity-managed read-modify-write. Called only while holding the row's lock
      * via {@link #lockBalances}, in the same transaction that inserts the entry (ADR-0002).
      *
-     * <p>DECLARED INVARIANT (relied on by the PLAN §4.6 posted_at clamp): callers pass the
+     * <p>DECLARED INVARIANT (relied on by the time model's posted_at clamp): callers pass the
      * entry's {@code posted_at} as {@code now}, so after any applyDelta the row's
      * {@code updated_at} IS the account's last posted_at whenever {@code posting_count > 0}
      * — which is exactly the floor the posting engine clamps against under the lock.

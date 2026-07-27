@@ -6,7 +6,7 @@ import io.github.essandhu.ledger.domain.error.InvalidAccountInput;
 
 /**
  * An ISO-4217 currency that denominates actual money. Validated against the JDK's ISO table
- * (framework-free, per the domain rule of PLAN §3) with one extra guard: pseudo-currencies —
+ * (framework-free, per the domain rule of the hexagonal rules) with one extra guard: pseudo-currencies —
  * XXX (no currency), XTS (testing), precious metals XAU/XAG/XPT/XPD — carry
  * {@code defaultFractionDigits() == -1} and are rejected, because an account in them would be
  * semantically meaningless and M2's Money/exponent logic could not handle them.

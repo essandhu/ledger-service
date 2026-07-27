@@ -88,7 +88,7 @@ class JournalPersistenceAdapterIntegrationTest {
         assertThat(entry.postings()).extracting(posting -> posting.amount().amount())
                 .containsExactly(250L, -250L);
         assertThat(entry.postings()).extracting(Posting::postedAt)
-                .as("header and legs share the one postedAt read under the lock (PLAN §4.6)")
+.as("header and legs share the one postedAt read under the lock")
                 .containsExactly(entry.postedAt(), entry.postedAt());
 
         // The primary-key lookup must answer the IDENTICAL value — same reassembly, whichever

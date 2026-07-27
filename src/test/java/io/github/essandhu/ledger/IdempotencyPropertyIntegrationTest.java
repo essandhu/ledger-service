@@ -38,7 +38,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * I9 as a universally-quantified property through the real stack (ADR-0004, TEST-STRATEGY §3):
+ * I9 as a universally-quantified property through the real stack (ADR-0004):
  * for ARBITRARY canonically-distinct command pairs under one key, the second request raises
  * the conflict and provably has zero side effects — no new journal rows, snapshots untouched.
  * Companion property (the no-false-conflict half): a structurally REBUILT but equal command

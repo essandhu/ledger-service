@@ -3,15 +3,16 @@
 Decisions that were genuinely contested — where a competent engineer could reasonably have chosen
 differently — are recorded here with the options, the trade-offs, and the reasons the choice fell
 where it did. Settled best practice (e.g. "use migrations", "don't store money as floats" — well,
-see ADR-0001 for why even that one earned a record) is documented in [PLAN.md](../PLAN.md) instead.
+see ADR-0001 for why even that one earned a record) gets no record: it lives in the code and the
+migrations, where it is enforced rather than argued.
 
 Format: [MADR](https://adr.github.io/madr/)-style, one file per decision, immutable once
 `Accepted` — superseding decisions get a new number and cross-link.
 
-> Note: the ADRs reference `PLAN.md` and `TEST-STRATEGY.md` (the milestone plan and the invariant
-> catalogue, e.g. the `I`-numbered invariants in each Proof section). Those are local working
-> documents, deliberately untracked; each ADR's Proof section restates the invariants it relies
-> on, so the ADRs stand on their own.
+> The `I`-numbered invariants cited in each Proof section are catalogued — each with a link to the
+> test that proves it — in the [guarantee table](../../README.md#the-guarantees) of the root
+> README. Each ADR's Proof section also restates the invariants it relies on, so the ADRs stand on
+> their own.
 
 ## Index
 
@@ -55,7 +56,7 @@ Explicitly out of scope for v1; each becomes an ADR when (and only when) the nee
 ## Considered options
 ## Decision outcome
 ### Consequences
-### Proof            <!-- the automated tests that enforce this decision (invariant IDs from TEST-STRATEGY.md) -->
+### Proof            <!-- the automated tests that enforce this decision (invariant IDs from the README guarantee table) -->
 ## Pros and cons of the options
 ## References
 ```

@@ -48,7 +48,7 @@ class MoneyTest {
         @Test
         @DisplayName("amounts are minor units at any exponent — JPY (0) and BHD (3) flow through unchanged")
         void minor_units_at_any_exponent() {
-            // TEST-STRATEGY §2.2: nothing downstream may assume two decimal places. 500 is
+            // The property-test rules: nothing downstream may assume two decimal places. 500 is
             // ¥500 in JPY (exponent 0) and 0.500 dinar in BHD (exponent 3) — Money neither
             // knows nor cares; the exponent is presentation, not arithmetic.
             assertThat(Money.of(500, JPY).plus(Money.of(500, JPY))).isEqualTo(Money.of(1000, JPY));

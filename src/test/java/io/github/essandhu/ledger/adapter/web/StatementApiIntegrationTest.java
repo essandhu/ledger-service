@@ -26,11 +26,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 
 /**
- * The statement HTTP surface (PLAN §5, M3) against real PostgreSQL: the keyset walk — exact,
+ * The statement HTTP surface (M3) against real PostgreSQL: the keyset walk — exact,
  * ordered, duplicate-free — the (from, to] window composing with I10's algebra over the
  * balance endpoint, the always-resumable cursor under live appends (the M3 demo), and the
  * strict cursor rejections. Every line's strictly-increasing posted_at is asserted on the
- * walk, which end-to-end-proves the PLAN §4.6 clamp through the real stack.
+ * walk, which end-to-end-proves the time model's clamp through the real stack.
  */
 @LedgerIntegrationTest
 @DisplayName("Statement API (M3): keyset paging, (from, to] window, live-append resume, strict cursors")
@@ -148,7 +148,7 @@ class StatementApiIntegrationTest {
                     Instant postedAt = Instant.parse(
                             JsonPath.read(json, "$.content[" + i + "].postedAt"));
                     if (previous != null) {
-                        // PLAN §4.6's clamp, observed end-to-end: strictly increasing
+                        // The time model's clamp, observed end-to-end: strictly increasing
                         // per-account posted_at means the id tiebreak never even engages
                         // across entries.
                         assertThat(postedAt).isAfter(previous);

@@ -1,4 +1,4 @@
--- I15 (M6): the reconciliation record tables (PLAN §4.3, ADR-0002) — reconciliation_run and
+-- I15 (M6): the reconciliation record tables (ADR-0002) — reconciliation_run and
 -- reconciliation_finding. The job recomputes every account's (SUM(amount), COUNT(*)) from
 -- postings and compares it to the (balance, posting_count) snapshot pair; a run row records
 -- each sweep's verdict, a finding row records each drifted account. Findings are flag-and-alert
@@ -6,13 +6,13 @@
 -- auto-repair", which is why nothing in this schema (or the grants below) offers a correction
 -- path.
 --
--- Two deliberate extensions of the PLAN §4.3 ER sketch, recorded at M6:
+-- Two deliberate extensions of the schema ER sketch, recorded at M6:
 --   * findings carry snapshot_count/computed_count alongside the balances — the posting_count
 --     watermark comparison is load-bearing (ADR-0002: compensating corruption can leave SUM
 --     intact while the count diverges), so a count-only drift must be expressible as a finding;
---   * runs carry triggered_by (PLAN §7 auditability: journal_entry.created_by precedent) and
+-- * runs carry triggered_by (the auth model auditability: journal_entry.created_by precedent) and
 --     the three integrity-check counters (currency/posted_at denormalization re-verification per
---     PLAN §4.3, and the I5 global per-currency zero-sum re-check per ADR-0002's Proof section),
+-- the schema, and the I5 global per-currency zero-sum re-check per ADR-0002's Proof section),
 --     because a check the job performs but does not record is a check nobody can audit later.
 --
 -- ADRs in force: ADR-0002 (snapshot + watermark, the reconciliation safety net this schema
@@ -21,13 +21,13 @@
 -- consistent with the atomic posting transactions it observes).
 
 CREATE TABLE reconciliation_run (
-    -- Application-generated UUIDv7 (PLAN §4.3: exactly one ID source). Also the identifying
+    -- Application-generated UUIDv7 (exactly one ID source). Also the identifying
     -- Spring Batch JobParameter, tying BATCH_JOB_INSTANCE to this row for cross-audit.
     id                       uuid        PRIMARY KEY,
     -- Both from the injected Clock via the application service; NO DEFAULT now(), as everywhere
     -- (the V2 principle: ambient time below the application is invisible to the ArchUnit rule).
     -- Deliberately NO finished_at >= started_at CHECK: the two are independent wall-clock reads
-    -- with no monotonicity guarantee (the PLAN §4.6 clock-step posture), and a cross-column
+    -- with no monotonicity guarantee (the time model's clock-step posture), and a cross-column
     -- temporal CHECK would reject BOTH terminal updates after a backwards step — wedging the
     -- run in RUNNING, including the FAILED stamp. It also mirrors no domain rule: the record's
     -- constructor enforces only the shape constraints below (the domain decides first).
@@ -104,7 +104,7 @@ $$;
 
 CREATE TABLE reconciliation_finding (
     -- Application-generated UUIDv7; time-ordered ids make ORDER BY id the insertion order,
-    -- which is the findings-listing order (the account listing precedent, PLAN §5).
+    -- which is the findings-listing order (the account listing precedent).
     id               uuid   PRIMARY KEY,
     run_id           uuid   NOT NULL REFERENCES reconciliation_run (id),
     account_id       uuid   NOT NULL REFERENCES account (id),

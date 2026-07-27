@@ -5,7 +5,7 @@ import org.springframework.security.oauth2.jwt.Jwt;
 /**
  * A bearer token that authenticated but carries no usable {@code sub} claim. RFC 7519 makes
  * {@code sub} optional, so a misconfigured issuer can mint such a token and the resource server
- * will accept it — but every write here records {@code created_by} = JWT subject (PLAN §7), so
+ * will accept it — but every write here records {@code created_by} = JWT subject, so
  * without one the request cannot be attributed. Unguarded, {@code jwt.getSubject()} returning
  * {@code null} would NPE into a 500 at the command constructor; this is the loud, correct
  * refusal instead.
@@ -20,7 +20,7 @@ import org.springframework.security.oauth2.jwt.Jwt;
 final class MissingTokenSubject extends RuntimeException {
 
     MissingTokenSubject() {
-        super("the bearer token carries no subject (sub) claim; writes are attributed to it (PLAN §7)");
+        super("the bearer token carries no subject (sub) claim; writes are attributed to it");
     }
 
     /** The one guard all write controllers route the principal through. */

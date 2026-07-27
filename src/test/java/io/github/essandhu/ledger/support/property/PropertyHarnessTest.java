@@ -14,12 +14,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
 /**
- * Meta-tests for the in-repo property harness — the harness proving itself. TEST-STRATEGY §2.2
+ * Meta-tests for the in-repo property harness — the harness proving itself. The property-test rules
  * and ADR-0005 both require these to land BEFORE any invariant depends on {@link Property}: the
  * failure mode ADR-0005 names for an owned harness is "harness bugs masking real defects", and
  * the only defense is that the harness's own guarantees (a false property fails, a failure is
  * replayable, shrinking terminates, iteration counts obey their overrides) are themselves
- * test-backed. TEST-STRATEGY §1's determinism ground rule is the sharpest of these: "a failure
+ * test-backed. The test ground rules' determinism ground rule is the sharpest of these: "a failure
  * message that cannot be reproduced is treated as a test defect" — so seed replay is asserted
  * here by literally parsing a failure message and re-running from it.
  *

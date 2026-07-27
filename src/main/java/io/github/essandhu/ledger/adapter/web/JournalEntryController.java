@@ -28,8 +28,8 @@ import io.github.essandhu.ledger.domain.model.EntryId;
 import io.github.essandhu.ledger.domain.model.Money;
 
 /**
- * The journal-entry surface (PLAN §5). Thin: DTO ↔ command mapping only; created_by = JWT sub
- * (PLAN §7). M4: the write endpoints require {@code Idempotency-Key} (ADR-0004) — absence is
+ * The journal-entry surface. Thin: DTO ↔ command mapping only; created_by = JWT sub.
+ * M4: the write endpoints require {@code Idempotency-Key} (ADR-0004) — absence is
  * the framework's own 400 before this code runs; outcome mapping and the lost-race retry live
  * in {@link PostingResponses}, shared with the transfer surface.
  */

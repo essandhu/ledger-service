@@ -32,7 +32,7 @@ import io.github.essandhu.ledger.domain.model.AccountStatus;
 import io.github.essandhu.ledger.domain.model.AccountType;
 import io.github.essandhu.ledger.domain.model.CurrencyCode;
 
-/** The account management surface (PLAN §5). Thin: DTO ↔ command mapping only. */
+/** The account management surface. Thin: DTO ↔ command mapping only. */
 @RestController
 @RequestMapping("/api/v1/accounts")
 class AccountController {

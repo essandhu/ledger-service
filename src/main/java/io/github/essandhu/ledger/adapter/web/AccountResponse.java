@@ -8,7 +8,7 @@ import io.github.essandhu.ledger.domain.model.AccountStatus;
 import io.github.essandhu.ledger.domain.model.AccountType;
 
 /**
- * Account representation (PLAN §5). The optimistic-lock {@code version} is deliberately not
+ * Account representation. The optimistic-lock {@code version} is deliberately not
  * exposed: v1 offers no client-driven concurrency control (no If-Match); the guard protects
  * overlapping writes server-side, and ETag/If-Match is the recorded upgrade path if
  * human-edit-window protection is ever wanted.

@@ -8,7 +8,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * The single home of ambient time (TEST-STRATEGY §1): production code reads time only through
+ * The single home of ambient time: production code reads time only through
  * this injected Clock, and the ArchUnit no-ambient-time rule allows system-clock construction
  * only in this package. Tests substitute fixed clocks.
  *

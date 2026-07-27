@@ -13,7 +13,7 @@ import io.github.essandhu.ledger.domain.model.AccountBalance;
 import io.github.essandhu.ledger.domain.model.AccountId;
 
 /**
- * Hand-written fake (TEST-STRATEGY §2.1: fakes over mock-framework stubs, so the port contract
+ * Hand-written fake (fakes over mock-framework stubs, so the port contract
  * is enforced, not just echoed): an in-memory snapshot store that POLICES the lock contract —
  * {@code lockBalances} rejects input that is not distinct and canonically ordered, because a
  * deadlock-prone service that merely echoes its input back must not pass its unit tests

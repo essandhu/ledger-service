@@ -13,7 +13,7 @@ import io.github.essandhu.ledger.support.concurrent.StressRunner;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * I8, the racy half (TEST-STRATEGY §4, workload d): one idempotency key fired from K threads
+ * I8, the racy half (workload d): one idempotency key fired from K threads
  * posts EXACTLY ONE entry, ever — M4 proved the two-thread races deterministic-ish;
  * this is the promised hammer, and it drives the HTTP surface so both settlement layers of
  * ADR-0004 are on the path: same-payload duplicates serialize on the balance locks and answer

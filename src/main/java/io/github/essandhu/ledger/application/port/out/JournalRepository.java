@@ -65,12 +65,12 @@ public interface JournalRepository {
     PostingAggregate sumPostingsAsOf(AccountId accountId, Instant at);
 
     /**
-     * One keyset page of an account's statement (PLAN §5): postings inside the
+     * One keyset page of an account's statement: postings inside the
      * {@code (from, to]} window of {@code filter}, strictly after {@code after} when present,
      * in {@code (posted_at, id)} ascending order — id ties broken BYTEWISE, PostgreSQL's uuid
      * order — at most {@code limit} rows, served by the {@code posting_account_statement}
      * index. Stable under concurrent appends: a new posting only ever sorts after every
-     * position already handed out (the posted_at clamp, PLAN §4.6).
+     * position already handed out (the posted_at clamp).
      */
     List<Posting> statementLines(AccountId accountId, StatementFilter filter,
             Optional<StatementCursor> after, int limit);

@@ -10,7 +10,7 @@ import org.springframework.context.annotation.Configuration;
 import io.github.essandhu.ledger.application.port.out.IdGenerator;
 
 /**
- * The one source of identifiers (PLAN §4.3): UUIDv7 via java-uuid-generator. Application-side
+ * The one source of identifiers: UUIDv7 via java-uuid-generator. Application-side
  * generation keeps ids opaque, time-ordered for B-tree locality, and independent of the
  * database (PostgreSQL 18's native uuidv7() exists but two id sources would be one too many).
  *

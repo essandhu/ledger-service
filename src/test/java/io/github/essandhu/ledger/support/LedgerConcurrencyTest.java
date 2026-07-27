@@ -15,7 +15,7 @@ import org.junit.jupiter.api.Tag;
  * cached context and one PostgreSQL container with every other integration class in a JVM
  * (extra JUnit tags do not change the Spring context key) — plus the {@code concurrency} tag
  * that moves the class out of the default {@code test} lane and into the {@code concurrencyTest}
- * Gradle task (TEST-STRATEGY §2: the first slow suite gets its own tag-filtered lane at M5).
+ * Gradle task (the first slow suite gets its own tag-filtered lane at M5).
  *
  * <p>Classes carry BOTH tags, honestly: these are integration tests (real HTTP surface, real
  * PostgreSQL) that happen to need a slower, parallel-writer lane. The default lane's

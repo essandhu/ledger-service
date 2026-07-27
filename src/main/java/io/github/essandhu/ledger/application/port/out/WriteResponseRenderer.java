@@ -19,7 +19,7 @@ public interface WriteResponseRenderer {
     Rendered render(JournalEntry entry);
 
     /** The response as first served: {@code status} is audit data (replays always answer 200
-     * per PLAN §5); {@code body} is returned verbatim on replay. */
+     * per the API contract); {@code body} is returned verbatim on replay. */
     record Rendered(int status, String body) {
         public Rendered {
             Objects.requireNonNull(body, "body");

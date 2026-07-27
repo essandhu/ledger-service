@@ -1,4 +1,4 @@
--- I16 (M6): the Spring Batch metadata tables (PLAN §4.3), installed by Flyway so that ALL
+-- I16 (M6): the Spring Batch metadata tables, installed by Flyway so that ALL
 -- schema — including the framework's — is version-controlled and applied by the schema-owning
 -- role. The runtime role cannot create tables (V1: no CREATE on schema public), and
 -- spring.batch.jdbc.initialize-schema=never keeps Boot's own initializer out of the picture,

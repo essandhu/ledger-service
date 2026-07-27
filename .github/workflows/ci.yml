@@ -25,8 +25,8 @@ jobs:
           java-version: "21"
       - uses: gradle/actions/setup-gradle@v6
       # build runs: compile, the default test lane (Testcontainers → real PostgreSQL on the
-      # runner's Docker), ArchUnit rules, and the JaCoCo coverage gate (ratchet:
-      # TEST-STRATEGY.md §5). The concurrency lane is EXCLUDED here only because it runs as
+      # runner's Docker), ArchUnit rules, and the JaCoCo coverage gate (0.90 overall, 1.00
+      # exact on the domain packages). The concurrency lane is EXCLUDED here only because it runs as
       # its own required job below, in parallel — a local `./gradlew build` still runs both.
       - run: ./gradlew build -x concurrencyTest
       - uses: actions/upload-artifact@v7
@@ -45,14 +45,13 @@ jobs:
           if-no-files-found: error
 
   concurrency-proof:
-    # M5 (TEST-STRATEGY §5): the parallel-writer proof — I6 racy, I7, I8 racy, I17 — as its
+    # M5: the parallel-writer proof — I6 racy, I7, I8 racy, I17 — as its
     # own required job, in parallel with the default lane rather than serialized behind it.
-    # "Required" is finished in branch protection, not here: add THIS job's display name to
-    # the required status checks (one-time repo setting). The name stays stable and does NOT
-    # embed the invariant list — protection matches check names verbatim, and a renamed job
-    # silently un-requires itself.
+    # "Required" lives in branch protection, not here: THIS job's display name is enrolled in
+    # the required status checks. The name stays stable and does NOT embed the invariant list —
+    # protection matches check names verbatim, and a renamed job silently un-requires itself.
     # Sizing knobs for a bigger hammer: ./gradlew concurrencyTest
-    # -Dledger.concurrency.threads=N -Dledger.concurrency.iterations=M (TEST-STRATEGY §4);
+    # -Dledger.concurrency.threads=N -Dledger.concurrency.iterations=M;
     # the harness scales its hang-detector bound with the requested work.
     name: Concurrency proof
     runs-on: ubuntu-latest
@@ -80,7 +79,7 @@ jobs:
       - name: Probe the stack
         # M0 walking-skeleton assertions: infra healthy, app healthy over anonymous HTTP,
         # security default-deny, and the real Keycloak issuer path — the one place the real
-        # token flow is exercised (integration tests mint their own JWTs, TEST-STRATEGY §2).
+        # token flow is exercised (integration tests mint their own JWTs).
         run: |
           set -euo pipefail
 
@@ -107,7 +106,7 @@ jobs:
             http://localhost:8081/realms/ledger/protocol/openid-connect/token)
           token=$(jq -r '.access_token // empty' <<< "$token_response")
           if [ -z "$token" ]; then
-            echo "failed to obtain a token from Keycloak (realm import broken? — PLAN §11); response:"
+            echo "failed to obtain a token from Keycloak (realm import broken?); response:"
             echo "$token_response"
             exit 1
           fi
@@ -119,7 +118,7 @@ jobs:
           fi
           echo "token flow OK — Keycloak-issued JWT accepted by the resource server"
 
-          # --- M1 demo (PLAN §9): account lifecycle with real Keycloak tokens ---
+          # --- M1 demo: account lifecycle with real Keycloak tokens ---
           # No -f: under `set -e` it would kill the script before the diagnostic below runs,
           # and it suppresses the response body the diagnostic wants to print.
           account=$(curl -s -X POST -H "Authorization: Bearer $token" \
@@ -168,8 +167,8 @@ jobs:
           fi
           echo "role matrix demo OK — LEDGER_READ token: GET 200, POST 403"
 
-          # --- M2 demo (PLAN §9): post a transfer, watch the rejection reasons, try to rewrite history ---
-          # Two LIABILITY accounts (customer money is what the ledger owes): PLAN §5 pins the
+          # --- M2 demo: post a transfer, watch the rejection reasons, try to rewrite history ---
+          # Two LIABILITY accounts (customer money is what the ledger owes): the API contract pins the
           # signs — a transfer debits the source (+amount raw, natural balance falls) and credits
           # the target (−amount raw, natural rises). The source may go negative; the target may
           # not, which arms the overdraft probe below. Role note: ledger-cli's service account
@@ -222,7 +221,7 @@ jobs:
           fi
 
           # Read it back as the read-only client: exactly two legs, zero-sum (I1), source
-          # +12345 / target −12345 (debit-positive, PLAN §4.2).
+          # +12345 / target −12345 (debit-positive).
           entry_read=$(curl -s -w '\n%{http_code}' -H "Authorization: Bearer $ro_token" \
             "http://localhost:8080/api/v1/journal-entries/$entry_id")
           code=$(tail -n 1 <<< "$entry_read")
@@ -243,7 +242,7 @@ jobs:
           echo "transfer demo OK — 201 + Location, READ-token GET shows 2 zero-sum legs (I1)"
 
           # Every rejection is a 422 whose problem type names the reason — the exact ProblemTypes
-          # URIs, one vocabulary with the ledger.posting.rejected metric tags (PLAN §8). First an
+          # URIs, one vocabulary with the ledger.posting.rejected metric tags. First an
           # entry that does not balance (I1) ...
           rejection=$(curl -s -w '\n%{http_code}' -X POST \
             -H "Authorization: Bearer $token" -H 'Content-Type: application/json' \
@@ -298,7 +297,7 @@ jobs:
           fi
           echo "immutability demo OK — UPDATE posting as ledger_app: permission denied (I3)"
 
-          # --- M3 demo (PLAN §9): balance truth now HAS an HTTP surface — the ADR-0002
+          # --- M3 demo: balance truth now HAS an HTTP surface — the ADR-0002
           # snapshot, an as-of derivation, and the keyset statement, all as the read-only
           # client. Exactly ±12345 with one posting each — the rejected probes above must
           # have left no residue (I4, now asserted over HTTP instead of psql).
@@ -310,7 +309,7 @@ jobs:
             echo "source balance expected 200, got $code; response: $body"
             exit 1
           fi
-          # Debited LIABILITY (PLAN §4.2): raw +12345, natural −12345, one posting, and asOf
+          # Debited LIABILITY: raw +12345, natural −12345, one posting, and asOf
           # ABSENT — the live snapshot omits the field (pinned at M3).
           summary=$(jq -r '[.rawBalance.amount, .balance.amount, .postingCount, has("asOf")] | join("|")' <<< "$body")
           if [ "$summary" != "12345|-12345|1|false" ]; then
@@ -324,7 +323,7 @@ jobs:
             echo "target balance expected raw|natural|count = -12345|12345|1, got: $summary"
             exit 1
           fi
-          echo "balance demo OK — snapshots read ±12345|1 over HTTP, natural flips the LIABILITY sign (ADR-0002, PLAN §4.2)"
+          echo "balance demo OK — snapshots read ±12345|1 over HTTP, natural flips the LIABILITY sign (ADR-0002)"
 
           # As-of (I10): at the entry's own posted_at the cut is inclusive; at 1970 it is empty.
           posted_at=$(jq -r '.postedAt // empty' <<< "$entry")
@@ -348,7 +347,7 @@ jobs:
           fi
           echo "as-of demo OK — inclusive cut at posted_at, empty prefix at 1970 (I10)"
 
-          # Statement (PLAN §5): one +12345 line linking back to the entry; the caught-up page
+          # Statement: one +12345 line linking back to the entry; the caught-up page
           # echoes the cursor (stateless tail-follow); a foreign cursor is a loud 400.
           page=$(curl -s -H "Authorization: Bearer $ro_token" \
             "http://localhost:8080/api/v1/accounts/$src_id/postings?limit=10")
@@ -377,7 +376,7 @@ jobs:
           fi
           echo "statement demo OK — keyset page, echoed cursor when caught up, foreign cursor 400 (M3)"
 
-          # --- M4 demo (PLAN §9, ADR-0004): replay a curl → same entry id, 200,
+          # --- M4 demo (ADR-0004): replay a curl → same entry id, 200,
           # Idempotency-Replayed: true; tampered replay → 422 idempotency-key-conflict;
           # missing header → 400. Real Keycloak token, real database arbitration.
           replay=$(curl -s -D - -w '\n%{http_code}' -X POST \
@@ -435,7 +434,7 @@ jobs:
           fi
           echo "idempotency demo OK — replay 200 + Idempotency-Replayed + same entry id, tampered 422 conflict, missing header 400 (M4, ADR-0004)"
 
-          # --- M6 demo (PLAN §9, ADR-0002, I15): reconcile clean, induce drift via superuser
+          # --- M6 demo (ADR-0002, I15): reconcile clean, induce drift via superuser
           # SQL, reconcile again — the run flags it, the finding pins the delta, and the drift
           # gauges fire on /actuator/prometheus. The scrape needs a LEDGER_METRICS token
           # (M7, ADR-0006 — ledger-cli's service account carries the role) and the exposition

@@ -9,7 +9,7 @@ import io.github.essandhu.ledger.domain.model.AccountId;
  * An account referenced inside a posting payload does not exist. Deliberately NOT
  * {@code AccountNotFound}: a path id that resolves to nothing is a 404 (the resource is the
  * URL), but a payload id that resolves to nothing is a 422 — the resource (the entry
- * collection) exists, the request semantics are refused (PLAN §5; the M1 advice javadocs pin
+ * collection) exists, the request semantics are refused (the API contract; the M1 advice javadocs pin
  * "do not fold the two together"). Detected under the balance lock as missing snapshot rows —
  * every real account has one by construction (V3 backfill + create-account-transaction insert).
  * Carries every unknown id, not just the first, so one round-trip reports the whole damage.

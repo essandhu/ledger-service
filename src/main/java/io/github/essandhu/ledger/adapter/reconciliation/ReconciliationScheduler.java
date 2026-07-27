@@ -8,7 +8,7 @@ import io.github.essandhu.ledger.application.port.out.IdGenerator;
 import io.github.essandhu.ledger.application.port.out.ReconciliationTrigger;
 
 /**
- * The scheduled driver of the reconciliation sweep (PLAN §1: "a scheduled Spring Batch job").
+ * The scheduled driver of the reconciliation sweep ("a scheduled Spring Batch job").
  * Calls the launcher directly rather than the admin use case: a schedule has no principal to
  * authorize, so it must not pass a {@code @PreAuthorize} gate (the IdempotencyPurger
  * precedent) — its runs are attributed to {@code "scheduler"} in the run row and the job

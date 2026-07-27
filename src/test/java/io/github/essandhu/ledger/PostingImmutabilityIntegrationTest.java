@@ -19,8 +19,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /**
  * I3 (M2): the ledger is append-only at the database level. What denies a history rewrite is the
  * runtime role's missing UPDATE/DELETE grants — not application code — so every probe here runs
- * through the application's own pool and expects the database's privilege error (PLAN's M2
- * acceptance: "try to UPDATE a posting and get a privilege error"). The positive INSERT probes
+ * through the application's own pool and expects the database's privilege error (the M2
+ * acceptance probe: "try to UPDATE a posting and get a privilege error"). The positive INSERT probes
  * prove the denials are the grant model at work rather than a broken pool or a missing table:
  * the very connection that can record an entry cannot rewrite one.
  *
@@ -65,7 +65,7 @@ class PostingImmutabilityIntegrationTest {
     }
 
     @Test
-    @DisplayName("I3: the runtime role cannot UPDATE posting — the PLAN M2 acceptance probe, verbatim")
+    @DisplayName("I3: the runtime role cannot UPDATE posting — the M2 acceptance probe, verbatim")
     void runtime_role_cannot_update_posting() throws SQLException {
         try (Connection connection = dataSource.getConnection();
              PreparedStatement update = connection.prepareStatement(
@@ -95,7 +95,7 @@ class PostingImmutabilityIntegrationTest {
     void runtime_role_can_insert_entry_and_postings() throws SQLException {
         // Everything through the app pool as raw SQL: ledger_app holds INSERT on account (V2)
         // and on all three V3 tables, and the posting API does not exist yet at this layer of
-        // the build. Marker names keep the rows additive-safe (TEST-STRATEGY §2).
+        // the build. Marker names keep the rows additive-safe.
         UUID accountId = UUID.randomUUID();
         UUID entryId = UUID.randomUUID();
         try (Connection connection = dataSource.getConnection()) {
@@ -122,8 +122,8 @@ class PostingImmutabilityIntegrationTest {
             // marker pair never disturbs the global per-currency conservation (I5) that other
             // tests assert by SQL. posted_at COPIES the header's instant rather than calling
             // now() again — in autocommit each statement gets its own now(), and since M6 the
-            // reconciliation sweep re-verifies the posted_at denormalization at rest (PLAN
-            // §4.3): a fixture with a mismatched leg would be flagged as corruption, correctly.
+            // reconciliation sweep re-verifies the posted_at denormalization at rest: a fixture
+            // with a mismatched leg would be flagged as corruption, correctly.
             for (long amount : new long[] {100, -100}) {
                 try (PreparedStatement insert = connection.prepareStatement("""
                         INSERT INTO posting (id, entry_id, account_id, amount, currency, posted_at)

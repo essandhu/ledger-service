@@ -7,7 +7,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * The M4 key shape rules at the guard itself (PLAN §5 M4 pin): non-blank, no control
+ * The M4 key shape rules at the guard itself (the API contract M4 pin): non-blank, no control
  * characters, no commas, at most 200 chars — each a 400-family violation. The integration
  * suite proves the HTTP posture; this pins the rules one by one so deleting any single check
  * fails a named test rather than surfacing as a downstream 500 off the V4 CHECKs.

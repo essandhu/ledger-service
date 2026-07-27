@@ -10,7 +10,7 @@ import io.github.essandhu.ledger.application.port.out.IdempotencyRecord;
 import io.github.essandhu.ledger.application.port.out.IdempotencyRepository;
 
 /**
- * Hand-written fake (TEST-STRATEGY §2.1): an in-memory idempotency store that ENFORCES the
+ * Hand-written fake: an in-memory idempotency store that ENFORCES the
  * port contract — duplicate (created_by, idem_key) insert throws like the PK would, the purge
  * deletes strictly-expired rows only, batch-bounded like the ctid DELETE. Counts inserts so
  * "a rejected posting records nothing" (ADR-0004) is a hard assertion.

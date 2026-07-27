@@ -11,7 +11,7 @@ import io.github.essandhu.ledger.support.concurrent.StressRunner;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * I7 — no lost updates (TEST-STRATEGY §4, workload a): N threads × M unit deposits into ONE
+ * I7 — no lost updates (workload a): N threads × M unit deposits into ONE
  * hot account must land a balance increase of exactly N·M. This is the direct hammer on
  * ADR-0003's race #1: two transactions that read balance 100, each add 1, and both write 101
  * would leave the count short — the ordered {@code FOR UPDATE} serialization makes that
@@ -21,7 +21,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * pair of workers collides on every operation.
  *
  * <p>Defense-in-depth cross-check: I4 (snapshot = Σ postings) is asserted for both accounts
- * afterwards — TEST-STRATEGY §3 notes a lost snapshot update would ALSO show up as
+ * afterwards — the invariant catalogue notes a lost snapshot update would ALSO show up as
  * snapshot-vs-Σ divergence, so I7 and I4 confirm each other from independent directions
  * (the snapshot row vs the append-only posting history).
  */
@@ -77,8 +77,8 @@ class DepositRaceConcurrencyTest extends ConcurrencyTestSupport {
         assertSnapshotEqualsPostings(hot);
         assertSnapshotEqualsPostings(funder);
 
-        // PLAN §9 M5 'lock metrics': the hammer's acquisitions were all timed — the shared
-        // registry only ever grows, so monotone >= keeps this additive-safe (PLAN §8).
+        // M5 'lock metrics': the hammer's acquisitions were all timed — the shared
+        // registry only ever grows, so monotone >= keeps this additive-safe.
         assertThat(lockWaitCount())
                 .as("ledger.posting.lock.wait sampled every posting's acquisition")
                 .isGreaterThanOrEqualTo(lockWaitsBefore + expected);

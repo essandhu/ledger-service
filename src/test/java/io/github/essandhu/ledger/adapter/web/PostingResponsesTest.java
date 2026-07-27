@@ -94,7 +94,7 @@ class PostingResponsesTest {
     }
 
     @Test
-    @DisplayName("Posted → 201 + Location; Replayed → 200 + Idempotency-Replayed: true and NO Location (PLAN §5 M4 pin)")
+    @DisplayName("Posted → 201 + Location; Replayed → 200 + Idempotency-Replayed: true and NO Location (the M4 API pin)")
     void outcome_mapping_is_the_pinned_split() {
         JournalEntry entry = entry();
 
@@ -111,7 +111,7 @@ class PostingResponsesTest {
         assertThat(replayed.getHeaders().getFirst(PostingResponses.IDEMPOTENCY_REPLAYED))
                 .isEqualTo("true");
         assertThat(replayed.getHeaders().getLocation())
-                .as("nothing was created by a replay — no Location (PLAN §5)").isNull();
+                .as("nothing was created by a replay — no Location").isNull();
         assertThat(replayed.getBody()).isEqualTo("{\"stored\":true}");
     }
 }

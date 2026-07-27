@@ -48,7 +48,7 @@ class OpenApiDocumentationTest {
         Map<String, Object> item = JsonPath.read(spec, "$.paths['/api/v1/accounts/{id}']");
         assertThat(item).containsKeys("get", "patch");
 
-        // M2 posting surface (PLAN §5) — derived purely from the MVC signatures, like M1's.
+        // M2 posting surface — derived purely from the MVC signatures, like M1's.
         Map<String, Object> entries = JsonPath.read(spec, "$.paths['/api/v1/journal-entries']");
         assertThat(entries).containsKeys("post");
         Map<String, Object> entryItem = JsonPath.read(spec, "$.paths['/api/v1/journal-entries/{id}']");
@@ -84,7 +84,7 @@ class OpenApiDocumentationTest {
                     .contains("not immutable over time");
         }
 
-        // M3 balance & statement surface (PLAN §5).
+        // M3 balance & statement surface.
         Map<String, Object> balance =
                 JsonPath.read(spec, "$.paths['/api/v1/accounts/{id}/balance']");
         assertThat(balance).containsKeys("get");
@@ -92,7 +92,7 @@ class OpenApiDocumentationTest {
                 JsonPath.read(spec, "$.paths['/api/v1/accounts/{id}/postings']");
         assertThat(postings).containsKeys("get");
 
-        // M6 reconciliation surface (PLAN §5).
+        // M6 reconciliation surface.
         Map<String, Object> runs = JsonPath.read(spec, "$.paths['/api/v1/reconciliation-runs']");
         assertThat(runs).containsKeys("post");
         Map<String, Object> runItem =

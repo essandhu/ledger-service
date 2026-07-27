@@ -6,7 +6,7 @@ import io.github.essandhu.ledger.domain.model.Account;
 import io.github.essandhu.ledger.domain.model.AccountType;
 import io.github.essandhu.ledger.domain.model.CurrencyCode;
 
-/** POST /accounts (PLAN §5): open a new ACTIVE account. */
+/** POST /accounts: open a new ACTIVE account. */
 public interface CreateAccountUseCase {
 
     Account create(CreateAccountCommand command);

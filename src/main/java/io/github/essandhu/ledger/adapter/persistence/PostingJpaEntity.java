@@ -20,7 +20,7 @@ import io.github.essandhu.ledger.domain.model.PostingId;
 /**
  * JPA face of one {@code posting} row — a leg of a posted entry, mapping the V3 columns
  * exactly: signed bigint minor units, debit-positive (ADR-0001), with the currency and
- * posted_at denormalized from account and header so M3 statements never join (PLAN §4.3).
+ * posted_at denormalized from account and header so M3 statements never join.
  * {@code @Immutable} is layer 2 of I3: Hibernate never dirty-checks these rows, so even a bug
  * that mutates a loaded instance cannot emit an UPDATE (layer 1 is the mutator-free domain
  * record, layer 3 the absent UPDATE/DELETE grants that stop hand-written SQL too). No

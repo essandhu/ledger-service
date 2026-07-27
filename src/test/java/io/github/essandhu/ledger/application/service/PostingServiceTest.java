@@ -53,7 +53,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * The pinned critical section over fakes (ADR-0003 §Decision, PLAN §6): draft validation
+ * The pinned critical section over fakes (ADR-0003 §Decision): draft validation
  * before any I/O, canonically ordered locking, post-lock-only status reads, checked overdraft
  * arithmetic, posted_at under the lock — and the ADR-0004 contract that a rejected posting
  * writes NOTHING (the fakes count inserts and deltas so "nothing" is a hard assertion, not an
@@ -268,7 +268,7 @@ class PostingServiceTest {
     }
 
     @Test
-    @DisplayName("currency mismatch: a leg's currency must match its account's (PLAN §4.2)")
+    @DisplayName("currency mismatch: a leg's currency must match its account's")
     void leg_currency_must_match_account_currency() {
         AccountId cash = seeded(LOW, AccountType.ASSET, false, EUR, 250);
         AccountId equity = seeded(MID, AccountType.EQUITY, false, EUR, 0);
@@ -418,7 +418,7 @@ class PostingServiceTest {
     }
 
     @Test
-    @DisplayName("PLAN §4.6: posted_at comes from the injected Clock, read under the lock, shared by header, legs, and deltas")
+    @DisplayName("The time model: posted_at comes from the injected Clock, read under the lock, shared by header, legs, and deltas")
     void posted_at_comes_from_the_clock() {
         AccountId cash = seeded(LOW, AccountType.ASSET, false, EUR, 0);
         AccountId equity = seeded(MID, AccountType.EQUITY, false, EUR, 0);
@@ -432,7 +432,7 @@ class PostingServiceTest {
     }
 
     @Test
-    @DisplayName("PLAN §4.6: posted_at is clamped strictly above a touched account's last posted_at — a backwards wall clock cannot reorder an account's postings")
+    @DisplayName("The time model: posted_at is clamped strictly above a touched account's last posted_at — a backwards wall clock cannot reorder an account's postings")
     void posted_at_never_regresses_behind_a_touched_accounts_last_posting() {
         AccountId cash = seeded(LOW, AccountType.ASSET, false, EUR, 0);
         AccountId equity = seeded(MID, AccountType.EQUITY, false, EUR, 0);
@@ -453,7 +453,7 @@ class PostingServiceTest {
     }
 
     @Test
-    @DisplayName("PLAN §4.6: the posted_at clamp takes the strictest floor across ALL touched accounts")
+    @DisplayName("The time model: the posted_at clamp takes the strictest floor across ALL touched accounts")
     void posted_at_clamp_takes_the_max_across_touched_accounts() {
         AccountId cash = seeded(LOW, AccountType.ASSET, false, EUR, 0);
         AccountId equity = seeded(MID, AccountType.EQUITY, false, EUR, 0);
@@ -466,7 +466,7 @@ class PostingServiceTest {
     }
 
     @Test
-    @DisplayName("PLAN §4.6: when the wall clock is already ahead of every floor, posted_at is the clock reading")
+    @DisplayName("The time model: when the wall clock is already ahead of every floor, posted_at is the clock reading")
     void posted_at_uses_the_clock_when_ahead_of_all_floors() {
         AccountId cash = seeded(LOW, AccountType.ASSET, false, EUR, 0);
         AccountId equity = seeded(MID, AccountType.EQUITY, false, EUR, 0);
@@ -478,7 +478,7 @@ class PostingServiceTest {
     }
 
     @Test
-    @DisplayName("PLAN §4.6: an account's FIRST posting is not clamped — updated_at is creation time then, not posting history")
+    @DisplayName("The time model: an account's FIRST posting is not clamped — updated_at is creation time then, not posting history")
     void first_posting_is_not_clamped_by_account_creation_time() {
         // Fresh seeds carry posting_count = 0 with updated_at = creation time. The floor
         // exists to order postings among THEMSELVES (keyset/as-of correctness); a posting at
@@ -492,7 +492,7 @@ class PostingServiceTest {
     }
 
     @Test
-    @DisplayName("PLAN §5, literally: transfer source is the DEBIT (+amount), target the CREDIT (−amount)")
+    @DisplayName("The API contract, literally: transfer source is the DEBIT (+amount), target the CREDIT (−amount)")
     void transfer_builds_debit_source_credit_target() {
         AccountId source = seeded(LOW, AccountType.ASSET, false, EUR, 0);
         AccountId target = seeded(MID, AccountType.ASSET, true, EUR, 0);
@@ -787,8 +787,8 @@ class PostingServiceTest {
         @Test
         @DisplayName("race, settled under the lock: a duplicate transfer that would now overdraft replays — never overdraft")
         void race_loser_transfer_replays_under_the_lock_instead_of_overdraft() {
-            // The winner already drained the strict TARGET (the credited, −amount side,
-            // PLAN §5) to raw 0; re-judging the duplicate against that state would compute
+            // The winner already drained the strict TARGET (the credited, −amount side per
+            // the API contract) to raw 0; re-judging the duplicate against that state would compute
             // natural −60 and file the SUCCEEDED transfer as an overdraft — and per
             // ADR-0004's option-2b analysis, a client told its transfer failed re-sends under
             // a fresh key, which double-posts.

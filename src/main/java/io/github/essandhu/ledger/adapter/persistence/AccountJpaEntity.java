@@ -18,7 +18,7 @@ import io.github.essandhu.ledger.domain.model.CurrencyCode;
 
 /**
  * JPA face of the {@code account} row. {@code @Version} is the optimistic guard for concurrent
- * metadata edits (PLAN §4.3) — a {@code Long} so null marks a not-yet-persisted entity (Spring
+ * metadata edits — a {@code Long} so null marks a not-yet-persisted entity (Spring
  * Data's isNew check ⇒ INSERT without a preceding merge SELECT). No equals/hashCode: entities
  * are never held in sets or compared, and dead code is a coverage and correctness liability.
  * {@link #toDomain()} rebuilds through the domain constructor, so its invariants re-run on

@@ -5,7 +5,7 @@ import java.util.UUID;
 
 /**
  * Identity of a {@link JournalEntry}. UUIDv7 in practice (time-ordered for index locality,
- * PLAN §4.3) — generated application-side behind the {@code IdGenerator} port; the domain
+ * The schema) — generated application-side behind the {@code IdGenerator} port; the domain
  * neither generates ids nor cares about the version bits.
  */
 public record EntryId(UUID value) {

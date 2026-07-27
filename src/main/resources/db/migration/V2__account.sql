@@ -1,9 +1,9 @@
--- I16 (M1): the account table (PLAN §4.3) and least-privilege grants for the runtime role.
+-- I16 (M1): the account table and least-privilege grants for the runtime role.
 --
 -- M2 forward-contract (recorded here so the landmine is visible before it is armed): V3 creates
 -- account_balance and MUST backfill one zero-balance row per already-existing account
 -- (INSERT ... SELECT id, 0, 0, ... FROM account) — the posting engine locks the balance row of
--- every touched account (PLAN §6), so an account without one would break the lock protocol.
+-- every touched account, so an account without one would break the lock protocol.
 -- From M2 on, the create-account use case inserts the snapshot row in the same transaction.
 
 CREATE TABLE account (
@@ -27,12 +27,12 @@ CREATE TABLE account (
                                CONSTRAINT account_status_valid CHECK
                                (status IN ('ACTIVE', 'FROZEN', 'CLOSED')),
     allow_negative boolean     NOT NULL,
-    -- Optimistic guard for concurrent metadata edits (PLAN §4.3); posting races use the M2
+    -- Optimistic guard for concurrent metadata edits; posting races use the M2
     -- balance lock, never this column.
     version        bigint      NOT NULL,
     -- Deliberately NO DEFAULT now() on the timestamps: a database default would silently mask a
     -- missing Clock wire in the application and reintroduce ambient time below the visibility
-    -- of the ArchUnit no-ambient-time rule (TEST-STRATEGY §1).
+    -- of the ArchUnit no-ambient-time rule.
     created_at     timestamptz NOT NULL,
     updated_at     timestamptz NOT NULL
 );
