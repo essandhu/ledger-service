@@ -2,6 +2,13 @@
 
 [![CI](https://github.com/essandhu/ledger-service/actions/workflows/ci.yml/badge.svg)](https://github.com/essandhu/ledger-service/actions/workflows/ci.yml)
 
+![The ledger service proving its guarantees end-to-end: default-deny auth, a balanced double entry, the rejection vocabulary, DB-enforced immutability, idempotent replay, exact reversal, and reconciliation detecting and repairing induced drift](docs/media/demo.gif)
+
+<sub>[`docs/media/tour.sh`](docs/media/tour.sh) against the compose stack — real Keycloak tokens,
+real HTTP, and **every line asserted**, so a regressed invariant fails the recording instead of
+faking it. A ~20-second cut of [`scripts/demo.sh`](scripts/demo.sh); see
+[docs/media/](docs/media/README.md) for how it is regenerated.</sub>
+
 A standalone, production-grade **double-entry ledger service** (Java 21 · Spring Boot 4.1 ·
 PostgreSQL 18). The differentiator: **every guarantee is backed by an automated test that proves
 it** — balanced entries, immutable history, overdraft safety under concurrency, idempotent writes,
@@ -52,12 +59,96 @@ Common ad-hoc money mistakes, and what this ledger does instead:
 | Trusted stored balances | A scheduled-able reconciliation sweep recomputes everything and gauges the drift (I15) |
 | `UPDATE`/`DELETE` as "fixes" | Immutable entries + linked reversals; the runtime role *cannot* mutate history (I3) |
 
+## Architecture
+
 Architecture is hexagonal (ports & adapters) in a single Gradle module — the boundaries are
 enforced by [ArchUnit rules that fail the build](src/test/java/io/github/essandhu/ledger/architecture/HexagonalArchitectureTest.java),
 not by convention: a framework-free domain core, use-case services owning the transaction
 boundary, and Spring/JPA/web/Batch confined to adapters. Property-based testing runs on an
 in-repo harness ([ADR-0005](docs/adr/ADR-0005-property-testing-tooling.md) explains why not
 jqwik on JUnit Platform 6).
+
+The diagram below follows a request inward. The dashed hexagons are the **ports** — interfaces
+the core owns — and every arrow crossing one is a call against an interface, never against a
+class; the compile-time dependencies run the other way, from adapters into the core, which is
+precisely what I14 checks. Two adapters therefore sit on both sides of the boundary:
+`adapter.web` also *implements* an out-port (`WriteResponseRenderer`, which stores the
+byte-for-byte body an idempotent replay returns), and `adapter.reconciliation` exists mainly to
+implement `ReconciliationTrigger`.
+
+```mermaid
+flowchart TB
+    cli(["client"])
+    kc(["Keycloak 26<br/>JWT issuer"])
+
+    web["<b>adapter.web</b><br/>controllers · RFC 9457 problems<br/>keyset cursor codec"]
+    pin{{"<b>application.port.in</b><br/>TransferFunds · PostJournalEntry<br/>ReverseEntry · ReconcileBalances · queries"}}
+    svc["<b>application.service</b><br/>PostingService · BalanceService<br/>AccountService · reconciliation services"]
+    dom["<b>domain</b> — JDK only, float/double banned<br/>Money · EntryDraft · Posting<br/>Account · JournalEntry · typed errors"]
+    pout{{"<b>application.port.out</b><br/>Journal · Balance · Account · Idempotency<br/>Reconciliation repos · ReconciliationTrigger"}}
+    jpa["<b>adapter.persistence</b><br/>JPA entities · Spring Data repositories"]
+    recon["<b>adapter.reconciliation</b><br/>Spring Batch sweep · drift gauges"]
+    db[("PostgreSQL 18<br/>append-only postings<br/>grants enforce I3")]
+
+    cli --> web
+    kc -. "validates bearer tokens" .-> web
+    web --> pin
+    pin --> svc
+    svc --> dom
+    svc --> pout
+    pout --> jpa
+    pout -- ReconciliationTrigger --> recon
+    recon -- "repository ports" --> jpa
+    jpa --> db
+
+    classDef adapter fill:#fff4e6,stroke:#e8871a,color:#1f2937
+    classDef core fill:#e7f0ff,stroke:#2f6fdb,color:#1f2937
+    classDef port fill:#e9f9ee,stroke:#1f9d55,color:#1f2937,stroke-dasharray:5 3
+    classDef edge fill:#f2f2f2,stroke:#6b7280,color:#1f2937
+    class web,jpa,recon adapter
+    class svc,dom core
+    class pin,pout port
+    class cli,kc,db edge
+```
+
+### The write path
+
+Every money mover — journal entry, transfer, reversal — funnels through one method with one
+critical section. The idempotency verdict comes first (a replay executes nothing at all), then
+draft validation with no I/O, then a single lock site that orders account ids canonically, and
+only then anything account-dependent. That ordering is what makes I6, I8, I9 and I17
+simultaneously true, and it is the subject of
+[ADR-0003](docs/adr/ADR-0003-concurrency-control.md) and
+[ADR-0004](docs/adr/ADR-0004-idempotency.md).
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as Client
+    participant W as adapter.web
+    participant P as PostingService
+    participant DB as PostgreSQL
+
+    C->>W: POST /api/v1/transfers · Idempotency-Key: k
+    W->>P: transfer(command) — @PreAuthorize + @Transactional
+    P->>P: SHA-256 over the frozen canonical command
+    P->>DB: is (principal, k) already settled?
+    alt success recorded, same hash
+        DB-->>P: the stored response
+        P-->>C: 200 · original body byte-for-byte · Idempotency-Replayed: true
+    else success recorded, different hash
+        P-->>C: 422 idempotency-key-conflict · nothing written
+    else no record
+        P->>P: validate the draft — I1 and I2 decided before any I/O
+        P->>DB: SELECT … FOR UPDATE on every touched snapshot, canonical id order
+        Note over P,DB: one lock order for the whole system ⇒ no interleaving deadlocks (I17)
+        P->>DB: re-read the idempotency record under those locks
+        P->>P: status, currency, overdraft, overflow — all judged under lock
+        P->>DB: INSERT entry + postings · UPDATE snapshots · INSERT idempotency record
+        DB-->>P: one commit, one truth
+        P-->>C: 201 · the entry
+    end
+```
 
 ## API
 
@@ -91,6 +182,12 @@ The OpenAPI spec is generated from the code, asserted by
 and published as a CI artifact on every build — it cannot be stale. Swagger UI at
 `/swagger-ui.html` (any authenticated token).
 
+![Swagger UI rendering the generated OpenAPI 3.1 document for POST /api/v1/transfers, showing the full idempotency contract and the required Idempotency-Key header parameter](docs/media/openapi.png)
+
+<sub>The idempotency contract is not README-only prose: it is on the operation in the generated
+spec, which [ADR-0004](docs/adr/ADR-0004-idempotency.md) discharges through an
+`OperationCustomizer` so the documentation cannot drift from the code.</sub>
+
 ## Quickstart
 
 Requirements: Docker (that's it — the JDK is toolchain-resolved, Gradle comes from the wrapper;
@@ -120,6 +217,10 @@ finale: a superuser corrupts a snapshot **out-of-band**, the reconciliation swee
 (finding row, delta, Prometheus gauges), the snapshot is repaired by recomputation, and the
 final sweep reads CLEAN again.
 
+The GIF at the top of this README is [`docs/media/tour.sh`](docs/media/tour.sh) — the same story
+against an already-running stack, so it fits in twenty seconds. It is equally assertion-bearing
+and safe to re-run.
+
 ## Observability
 
 Micrometer → `/actuator/prometheus`, guarded by the dedicated `LEDGER_METRICS` role — the
@@ -139,6 +240,13 @@ client-credentials instead of a static token).
 `docker compose --profile observability up -d` adds Prometheus (v3.13) and Grafana (13.1) with a
 provisioned dashboard (anonymous viewer at `http://localhost:3000`). Teardown needs the profile
 too: `docker compose --profile observability down`.
+
+![The provisioned Grafana dashboard during induced drift: the two headline gauges read 1 account adrift and 4.20K minor units, beside reconciliation outcomes, posting throughput and latency, rejections by problem type, balance-lock wait, and idempotency replay and conflict counts](docs/media/grafana.png)
+
+<sub>Caught in the act: the gauges are red because drift was induced out-of-band first — the same
+superuser `UPDATE` the demo uses, which the application's own role cannot perform (I3) — and the
+sweep convicted it. The capture script repairs the snapshot by recomputation and re-verifies
+`CLEAN` before exiting; see [docs/media/](docs/media/README.md).</sub>
 
 > **Upgrading an existing stack:** Keycloak's `--import-realm` skips realms that already exist,
 > so a pre-M7 `pgdata` volume has neither the `LEDGER_METRICS` role nor the `ledger-metrics`
