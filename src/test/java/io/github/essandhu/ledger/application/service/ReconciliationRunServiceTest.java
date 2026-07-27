@@ -18,6 +18,7 @@ import io.github.essandhu.ledger.domain.model.AccountId;
 import io.github.essandhu.ledger.support.fakes.FakeReconciliationRepository;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * The run record-keeper's verdict logic (ADR-0002): what counts as drift is decided HERE, in
@@ -89,6 +90,16 @@ class ReconciliationRunServiceTest {
         assertThat(closed.verdict()).isEqualTo(ReconciliationRun.Status.DRIFT);
         assertThat(closed.results().driftCount()).isZero();
         assertThat(closed.results().currencyMismatchCount()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("Closed rejects a negative absoluteDrift — Σ|delta| is nonnegative by construction, so a negative figure is a caller bug")
+    void closed_rejects_negative_absolute_drift() {
+        ReconciliationRun.Results results = new ReconciliationRun.Results(12, 0, 0, 0, 0);
+        assertThatThrownBy(() -> new ReconciliationRunService.Closed(
+                ReconciliationRun.Status.CLEAN, results, -1))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("absoluteDrift");
     }
 
     @Test

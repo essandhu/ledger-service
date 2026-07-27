@@ -1,0 +1,25 @@
+# Prometheus for the compose observability profile (M7, ADR-0006).
+#
+# The scrape authenticates via oauth2 client_credentials against the in-network Keycloak using
+# the dedicated ledger-metrics client — its service account holds ONLY LEDGER_METRICS, so the
+# scraper can read metrics and do nothing else (no hierarchy, same posture as the API roles).
+# Prometheus refreshes the token itself on expiry (realm accessTokenLifespan is 900s), which is
+# why a static `authorization: Bearer` credential was rejected: a hand-minted token dies in 15
+# minutes and something external would have to keep rewriting it. Trade-off accepted for this
+# demo stack: Keycloak sits on the scrape path (an IdP outage pauses metrics collection) —
+# ADR-0006 records why that beats an unauthenticated management port here.
+#
+# KC_HOSTNAME pins the issuer to http://localhost:8081, and tokens minted in-network at
+# http://keycloak:8080 carry that same issuer — exactly what the app validates.
+global:
+  scrape_interval: 15s   # mirrored in the Grafana datasource's timeInterval
+
+scrape_configs:
+  - job_name: ledger
+    metrics_path: /actuator/prometheus
+    oauth2:
+      client_id: ledger-metrics
+      client_secret: ledger-metrics-dev-secret   # dev/demo stack only
+      token_url: http://keycloak:8080/realms/ledger/protocol/openid-connect/token
+    static_configs:
+      - targets: ["app:8080"]

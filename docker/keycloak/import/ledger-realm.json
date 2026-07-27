@@ -7,7 +7,8 @@
     "realm": [
       { "name": "LEDGER_ADMIN", "description": "Account lifecycle management" },
       { "name": "LEDGER_WRITE", "description": "Post transfers, journal entries, reversals" },
-      { "name": "LEDGER_READ", "description": "Balances, statements, entry lookups" }
+      { "name": "LEDGER_READ", "description": "Balances, statements, entry lookups" },
+      { "name": "LEDGER_METRICS", "description": "Scrape /actuator/metrics and /actuator/prometheus (ADR-0006)" }
     ]
   },
   "clients": [
@@ -36,6 +37,19 @@
       "implicitFlowEnabled": false,
       "directAccessGrantsEnabled": false,
       "fullScopeAllowed": true
+    },
+    {
+      "clientId": "ledger-metrics",
+      "name": "Metrics scraper (Prometheus oauth2 client_credentials) — LEDGER_METRICS only, can scrape but never post or read the ledger (ADR-0006)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "ledger-metrics-dev-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "fullScopeAllowed": true
     }
   ],
   "users": [
@@ -43,13 +57,19 @@
       "username": "service-account-ledger-cli",
       "enabled": true,
       "serviceAccountClientId": "ledger-cli",
-      "realmRoles": ["LEDGER_ADMIN", "LEDGER_WRITE", "LEDGER_READ"]
+      "realmRoles": ["LEDGER_ADMIN", "LEDGER_WRITE", "LEDGER_READ", "LEDGER_METRICS"]
     },
     {
       "username": "service-account-ledger-readonly",
       "enabled": true,
       "serviceAccountClientId": "ledger-readonly",
       "realmRoles": ["LEDGER_READ"]
+    },
+    {
+      "username": "service-account-ledger-metrics",
+      "enabled": true,
+      "serviceAccountClientId": "ledger-metrics",
+      "realmRoles": ["LEDGER_METRICS"]
     }
   ]
 }

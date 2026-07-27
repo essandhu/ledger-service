@@ -176,6 +176,21 @@ class BalanceLockIntegrationTest {
         assertBalanceRow(id, 0, 0, T0);
     }
 
+    @Test
+    @DisplayName("ADR-0003 degenerate case: lockBalances([]) answers the empty lock set in Java — SQL is never consulted")
+    void lock_balances_of_no_ids_returns_empty_without_sql() {
+        // The pin has teeth because the alternative is loud: without the Java-side guard the
+        // adapter would render a native IN () — a SQL syntax error — so an empty result
+        // (rather than an exception out of the query) proves the degenerate answer was
+        // produced before the database.
+        List<AccountBalance> locked =
+                transactionTemplate.execute(tx -> balances.lockBalances(List.of()));
+
+        assertThat(locked)
+                .as("no flow produces an empty lock set, but the answer must still be total")
+                .isEmpty();
+    }
+
     /**
      * Port-level fixture, below the use-case layer, so it honors by hand what the
      * create-account transaction honors in code: every account gets its zero snapshot row in

@@ -4,6 +4,7 @@ plugins {
     java
     jacoco
     alias(libs.plugins.spring.boot)
+    alias(libs.plugins.pitest)
 }
 
 group = "io.github.essandhu"
@@ -49,6 +50,16 @@ dependencies {
     testImplementation("org.springframework.batch:spring-batch-test")
     testImplementation("org.awaitility:awaitility")
     testImplementation(libs.archunit.core)
+
+    // PIT's tool classpath (separate from testImplementation). No released pitest-junit5-plugin
+    // supports JUnit Platform 6 (pitest-junit5-plugin#113 — the failure mode is a SILENT
+    // "0 tests per mutation" green run); forcing the Platform 6 launcher artifacts the test
+    // runtime actually uses onto PIT's own classpath is the workaround from the (unmerged)
+    // fix PR #114. Versions ride the Boot BOM so the 4.1.1 re-pin cannot desynchronize them.
+    pitest(platform(SpringBootPlugin.BOM_COORDINATES))
+    pitest("org.junit.platform:junit-platform-launcher")
+    pitest("org.junit.jupiter:junit-jupiter-api")
+    pitest("org.junit.jupiter:junit-jupiter-engine")
 }
 
 tasks.test {
@@ -137,8 +148,23 @@ tasks.jacocoTestCoverageVerification {
             limit {
                 counter = "LINE"
                 value = "COVEREDRATIO"
-                // Coverage ratchet (TEST-STRATEGY.md §5): M1 → 0.70, M2 → 0.80, M4 → 0.85 (current), M7 → 0.90.
-                minimum = "0.85".toBigDecimal()
+                // Coverage ratchet (TEST-STRATEGY.md §5): M1 → 0.70, M2 → 0.80, M4 → 0.85, M7 → 0.90 (final).
+                minimum = "0.90".toBigDecimal()
+            }
+        }
+        // M7 (TEST-STRATEGY.md §5): the domain packages carry the invariants — every line is
+        // either exercised or should not exist. 1.00 with NO exclusions: the only uncovered
+        // code in the codebase (bootstrap main(), the JRE-mandated SHA-256 catch — four lines)
+        // lives outside domain, so this rule stays exact where exactness is the point.
+        rule {
+            element = "PACKAGE"
+            includes = listOf(
+                    "io.github.essandhu.ledger.domain.model",
+                    "io.github.essandhu.ledger.domain.error")
+            limit {
+                counter = "LINE"
+                value = "COVEREDRATIO"
+                minimum = "1.00".toBigDecimal()
             }
         }
     }
@@ -146,4 +172,35 @@ tasks.jacocoTestCoverageVerification {
 
 tasks.check {
     dependsOn(tasks.jacocoTestCoverageVerification)
+}
+
+pitest {
+    // TEST-STRATEGY §5 (M7): mutation testing is a NON-GATING report — no mutationThreshold,
+    // deliberately NOT wired into `check`; run it with `./gradlew pitest` (report lands in
+    // build/reports/pitest). The Platform-6 classpath workaround lives in the `pitest`
+    // dependency configuration above; the known upstream failure mode is a SILENT green run
+    // with "0 tests per mutation", so after any toolchain bump verify mutations.xml still
+    // contains KILLED mutations before trusting the numbers.
+    pitestVersion = libs.versions.pitest.core
+    junit5PluginVersion = libs.versions.pitest.junit5
+    // Mutate only the framework-free core: the domain invariants and use-case services are
+    // where a surviving mutant means a missing proof. Adapters are integration-tested against
+    // real infrastructure PIT must never fork (Testcontainers per mutant).
+    targetClasses = setOf(
+            "io.github.essandhu.ledger.domain.*",
+            "io.github.essandhu.ledger.application.*")
+    // targetTests DEFAULTS to targetClasses' globs — without this line every test outside
+    // domain/application would be silently dropped from the covering-test set.
+    targetTests = setOf("io.github.essandhu.ledger.*")
+    // Fast deterministic unit suites only, twice over (name globs + tag groups): one
+    // Testcontainers suite in the covering set would fork real PostgreSQL per mutant.
+    excludedTestClasses = setOf(
+            "*IntegrationTest",
+            "io.github.essandhu.ledger.concurrency.*",
+            "io.github.essandhu.ledger.WalkingSkeletonTest",
+            "io.github.essandhu.ledger.OpenApiDocumentationTest")
+    excludedGroups = setOf("integration", "concurrency")
+    threads = 4
+    outputFormats = setOf("XML", "HTML")
+    timestampedReports = false
 }

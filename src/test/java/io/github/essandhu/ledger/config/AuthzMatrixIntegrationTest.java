@@ -261,12 +261,22 @@ class AuthzMatrixIntegrationTest {
                 new Cell("GET", "/swagger-ui.html", NONE, 401),
                 new Cell("GET", "/swagger-ui.html", NO_ROLES, 302),
 
-                // actuator: health is THE anonymous surface; everything else needs a token
+                // actuator: health is THE anonymous surface; the metric surfaces need the
+                // dedicated LEDGER_METRICS role since M7 (ADR-0006) — no hierarchy here
+                // either, so ADMIN scrapes nothing and the scraper posts nothing. The last
+                // two cells pin the reverse direction: a metrics-only principal reads and
+                // triggers nothing in /api/v1.
                 new Cell("GET", "/actuator/health", NONE, 200),
                 new Cell("GET", "/actuator/metrics", NONE, 401),
-                new Cell("GET", "/actuator/metrics", NO_ROLES, 200),
+                new Cell("GET", "/actuator/metrics", NO_ROLES, 403),
+                new Cell("GET", "/actuator/metrics", "LEDGER_ADMIN", 403),
+                new Cell("GET", "/actuator/metrics", "LEDGER_METRICS", 200),
                 new Cell("GET", "/actuator/prometheus", NONE, 401),
-                new Cell("GET", "/actuator/prometheus", NO_ROLES, 200));
+                new Cell("GET", "/actuator/prometheus", NO_ROLES, 403),
+                new Cell("GET", "/actuator/prometheus", "LEDGER_ADMIN", 403),
+                new Cell("GET", "/actuator/prometheus", "LEDGER_METRICS", 200),
+                new Cell("GET", "/api/v1/accounts", "LEDGER_METRICS", 403),
+                new Cell("POST", "/api/v1/reconciliation-runs", "LEDGER_METRICS", 403));
     }
 
     @ParameterizedTest(name = "{0} {1} as {2} → {3}")

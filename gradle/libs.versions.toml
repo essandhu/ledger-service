@@ -15,12 +15,23 @@ postgresql-jdbc = "42.7.13"      # OVERRIDE of BOM-managed 42.7.11: CVE-2026-542
                                  # downgrade) fixed in 42.7.12 — drop this pin once a Boot patch manages
                                  # >= 42.7.12 (4.1.0 BOM still manages 42.7.11, re-checked 2026-07-22)
 jacoco = "0.8.15"                # Gradle 9's bundled default is 0.8.14; 0.8.15 is current
+pitest-plugin = "1.19.0"         # gradle-pitest-plugin: Gradle 9 + configuration-cache compatible since
+                                 # 1.19.0-rc.2; expect (harmless) Gradle 9 deprecation warnings until 1.20.0
+pitest-core = "1.25.8"           # PIT core (plugin default is 1.22.1; 1.25.x is current, Java 21 fine)
+pitest-junit5 = "1.2.3"          # NO released version supports JUnit Platform 6 (pitest-junit5-plugin#113,
+                                 # fix PR #114 closed unverified) — build.gradle.kts forces Platform 6
+                                 # artifacts onto PIT's tool classpath; see the pitest block's comment
 
 [libraries]
 springdoc-openapi-webmvc-ui = { module = "org.springdoc:springdoc-openapi-starter-webmvc-ui", version.ref = "springdoc" }
+# Renovate anchors only — never consumed in build.gradle.kts (the pitest extension takes bare
+# version strings, which Renovate cannot see; orphan [versions] keys emit no updates either).
+pitest-core-anchor = { module = "org.pitest:pitest", version.ref = "pitest-core" }
+pitest-junit5-anchor = { module = "org.pitest:pitest-junit5-plugin", version.ref = "pitest-junit5" }
 archunit-core = { module = "com.tngtech.archunit:archunit", version.ref = "archunit" }
 java-uuid-generator = { module = "com.fasterxml.uuid:java-uuid-generator", version.ref = "java-uuid-generator" }
 postgresql-jdbc = { module = "org.postgresql:postgresql", version.ref = "postgresql-jdbc" }
 
 [plugins]
 spring-boot = { id = "org.springframework.boot", version.ref = "spring-boot" }
+pitest = { id = "info.solidsoft.pitest", version.ref = "pitest-plugin" }

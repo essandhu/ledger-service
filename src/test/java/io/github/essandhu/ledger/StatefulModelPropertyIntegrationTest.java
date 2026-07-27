@@ -71,7 +71,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * assertions scoped to the iteration's own rows.
  */
 @LedgerIntegrationTest
-@DisplayName("ADR-0005 (M5): stateful model-vs-SUT — the service agrees with a sequential in-memory ledger after every command")
+@DisplayName("ADR-0005 (M5): stateful model-vs-SUT (I4) — the service agrees with a sequential in-memory ledger after every command")
 class StatefulModelPropertyIntegrationTest {
 
     private static final String REDUCED_ITERATIONS = "25";

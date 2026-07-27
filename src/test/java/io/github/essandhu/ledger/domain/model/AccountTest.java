@@ -114,13 +114,16 @@ class AccountTest {
 
         @ParameterizedTest
         @CsvSource({"ACTIVE", "FROZEN"})
-        @DisplayName("CLOSED is terminal: no edge leaves it")
+        @DisplayName("CLOSED is terminal: no edge leaves it, and the error names both states")
         void closed_is_terminal(AccountStatus target) {
             Account account = closed();
+            // Asserted through the accessors, not field reflection: from()/to() are the
+            // error's structured contract, and only a real call pins it.
             assertThatThrownBy(() -> account.transitionTo(target, T1))
-                    .isInstanceOf(InvalidStatusTransition.class)
-                    .hasFieldOrPropertyWithValue("from", AccountStatus.CLOSED)
-                    .hasFieldOrPropertyWithValue("to", target);
+                    .isInstanceOfSatisfying(InvalidStatusTransition.class, error -> {
+                        assertThat(error.from()).isEqualTo(AccountStatus.CLOSED);
+                        assertThat(error.to()).isEqualTo(target);
+                    });
         }
     }
 
@@ -270,9 +273,10 @@ class AccountTest {
         void nonzero_natural_balance_rejects_close() {
             Account account = active();
             assertThatThrownBy(() -> CloseBalanceRule.ensureZeroForClose(snapshot(account, 250), account.type()))
-                    .isInstanceOf(AccountBalanceNotZero.class)
-                    .hasFieldOrPropertyWithValue("accountId", account.id())
-                    .hasFieldOrPropertyWithValue("naturalBalance", 250L);
+                    .isInstanceOfSatisfying(AccountBalanceNotZero.class, error -> {
+                        assertThat(error.accountId()).isEqualTo(account.id());
+                        assertThat(error.naturalBalance()).isEqualTo(250L);
+                    });
         }
 
         @Test
@@ -283,9 +287,11 @@ class AccountTest {
             Account liability = Account.open(
                     new AccountId(UUID.fromString("019817b4-0000-7000-8000-000000000003")),
                     "Customer deposits", new CurrencyCode("EUR"), AccountType.LIABILITY, false, T0);
+            // naturalBalance() must report +5 (natural), not −5 (raw) — the payload the caller
+            // must clear speaks the same sign convention the rule judged.
             assertThatThrownBy(() -> CloseBalanceRule.ensureZeroForClose(snapshot(liability, -5), liability.type()))
-                    .isInstanceOf(AccountBalanceNotZero.class)
-                    .hasFieldOrPropertyWithValue("naturalBalance", 5L);
+                    .isInstanceOfSatisfying(AccountBalanceNotZero.class,
+                            error -> assertThat(error.naturalBalance()).isEqualTo(5L));
         }
 
         @Test

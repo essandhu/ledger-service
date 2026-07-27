@@ -1,0 +1,14 @@
+# Provisioned Prometheus datasource (M7 observability profile). The uid is pinned because
+# every dashboard panel references the datasource as {type: prometheus, uid: prometheus} —
+# an auto-generated uid would break the provisioned dashboard JSON.
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    uid: prometheus
+    jsonData:
+      timeInterval: 15s   # matches prometheus.yml's scrape_interval

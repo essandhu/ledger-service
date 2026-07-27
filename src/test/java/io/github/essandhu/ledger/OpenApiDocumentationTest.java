@@ -61,6 +61,10 @@ class OpenApiDocumentationTest {
 
         // M4 (ADR-0004): the Idempotency-Key header parameter is documented — required, in
         // header — on every money-moving POST, straight from the controller signatures.
+        // M7 discharges the ADR's deferred client-facing text: each of these operations must
+        // carry the replay/conflict semantics INCLUDING the two deviations from the IETF
+        // draft (block-instead-of-409, responses not immutable over time) — the OperationCustomizer
+        // keys off the parameter, so this loop also proves no money mover escaped it.
         for (String path : new String[] {"/api/v1/journal-entries",
                 "/api/v1/journal-entries/{id}/reversal", "/api/v1/transfers"}) {
             java.util.List<Map<String, Object>> parameters = JsonPath.read(spec,
@@ -70,6 +74,14 @@ class OpenApiDocumentationTest {
             assertThat(parameters.get(0))
                     .containsEntry("in", "header")
                     .containsEntry("required", true);
+            String description = JsonPath.read(spec,
+                    "$.paths['%s'].post.description".formatted(path));
+            assertThat(description)
+                    .as("ADR-0004 semantics discharged on POST " + path)
+                    .contains("Idempotency-Replayed: true")
+                    .contains("idempotency-key-conflict")
+                    .contains("blocks")
+                    .contains("not immutable over time");
         }
 
         // M3 balance & statement surface (PLAN §5).

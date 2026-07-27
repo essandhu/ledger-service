@@ -82,14 +82,22 @@ class MoneyTest {
         }
 
         @Test
-        @DisplayName("rejects mixed currencies with a typed CurrencyMismatch")
+        @DisplayName("rejects mixed currencies, reporting expected = receiver and actual = argument")
         void rejects_mixed_currencies() {
             Money eur = Money.of(100, EUR);
             Money usd = Money.of(100, USD);
             assertThatThrownBy(() -> eur.plus(usd))
-                    .isInstanceOf(CurrencyMismatch.class)
-                    .hasFieldOrPropertyWithValue("expected", EUR)
-                    .hasFieldOrPropertyWithValue("actual", USD);
+                    .isInstanceOfSatisfying(CurrencyMismatch.class, error -> {
+                        assertThat(error.expected()).isEqualTo(EUR);
+                        assertThat(error.actual()).isEqualTo(USD);
+                    });
+            // The payload order is receiver-then-argument, so swapping the operands must swap
+            // expected and actual — not merely re-report the same pair.
+            assertThatThrownBy(() -> usd.plus(eur))
+                    .isInstanceOfSatisfying(CurrencyMismatch.class, error -> {
+                        assertThat(error.expected()).isEqualTo(USD);
+                        assertThat(error.actual()).isEqualTo(EUR);
+                    });
         }
 
         @Test
