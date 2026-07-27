@@ -23,9 +23,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * The thin caller-facing service: mints the run id, delegates the sweep to the trigger port,
- * reads the verdict back; 404-shaped misses for unknown runs.
+ * reads the verdict back; 404-shaped misses for unknown runs; and (M8c) the run history,
+ * newest first.
  */
-@DisplayName("ReconciliationService: trigger and read-back")
+@DisplayName("ReconciliationService: trigger, read-back, and the run history")
 class ReconciliationServiceTest {
 
     private static final Instant NOW = Instant.parse("2026-07-26T12:00:00Z");
@@ -75,6 +76,37 @@ class ReconciliationServiceTest {
         assertThat(reads.run(MINTED).status()).isEqualTo(ReconciliationRun.Status.CLEAN);
         assertThatThrownBy(() -> reads.run(UUID.randomUUID()))
                 .isInstanceOf(ReconciliationRunNotFound.class);
+    }
+
+    @Test
+    @DisplayName("runs(): the history pages NEWEST first — page 0 is the latest sweep, not the oldest")
+    void runs_page_newest_first() {
+        // Three runs in id order (UUIDv7 ⇒ chronological); the listing must invert it.
+        List<UUID> chronological = List.of(
+                UUID.fromString("00000000-0000-7000-8000-000000000001"),
+                UUID.fromString("00000000-0000-7000-8000-000000000002"),
+                UUID.fromString("00000000-0000-7000-8000-000000000003"));
+        chronological.forEach(id -> {
+            runService.openRun(id, "scheduler");
+            runService.closeRun(id, 5);
+        });
+
+        ReconciliationService reads = service(completingTrigger);
+        var first = reads.runs(new PageSpec(0, 2));
+        assertThat(first.content()).extracting(ReconciliationRun::id)
+                .containsExactly(chronological.get(2), chronological.get(1));
+        assertThat(first.totalElements()).isEqualTo(3);
+        // The second page continues descending — no run is skipped or repeated.
+        assertThat(reads.runs(new PageSpec(1, 2)).content()).extracting(ReconciliationRun::id)
+                .containsExactly(chronological.get(0));
+    }
+
+    @Test
+    @DisplayName("runs(): no runs at all is an empty page, never an error")
+    void runs_of_empty_history_is_empty_page() {
+        var page = service(completingTrigger).runs(new PageSpec(0, 20));
+        assertThat(page.content()).isEmpty();
+        assertThat(page.totalElements()).isZero();
     }
 
     @Test

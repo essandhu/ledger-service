@@ -23,6 +23,11 @@ pitest-junit5 = "1.2.3"          # NO released version supports JUnit Platform 6
                                  # artifacts onto PIT's tool classpath; see the pitest block's comment
 jsoup = "1.22.2"                 # console fragment assertions (M8b) — NOT in the Boot BOM
                                  # (authoritative source: repo1 maven-metadata, not the stale search index)
+playwright = "1.61.0"            # console e2e lane (M8c) — NOT in the Boot BOM. Latest Java binding on
+                                 # repo1 maven-metadata (lastUpdated 2026-06-29), verified 2026-07-27; the
+                                 # npm line runs ahead (1.62.0) and is NOT evidence for this artifact.
+                                 # Used as a PLAIN library: @UsePlaywright is experimental and upstream-
+                                 # tested only on Jupiter 5.14, and this stack is Platform 6 (ADR-0005)
 
 [libraries]
 springdoc-openapi-webmvc-ui = { module = "org.springdoc:springdoc-openapi-starter-webmvc-ui", version.ref = "springdoc" }
@@ -34,6 +39,7 @@ archunit-core = { module = "com.tngtech.archunit:archunit", version.ref = "archu
 java-uuid-generator = { module = "com.fasterxml.uuid:java-uuid-generator", version.ref = "java-uuid-generator" }
 postgresql-jdbc = { module = "org.postgresql:postgresql", version.ref = "postgresql-jdbc" }
 jsoup = { module = "org.jsoup:jsoup", version.ref = "jsoup" }
+playwright = { module = "com.microsoft.playwright:playwright", version.ref = "playwright" }
 
 [plugins]
 spring-boot = { id = "org.springframework.boot", version.ref = "spring-boot" }

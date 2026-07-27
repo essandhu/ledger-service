@@ -13,12 +13,16 @@ import io.github.essandhu.ledger.console.api.LedgerApi.AccountStatus;
 import io.github.essandhu.ledger.console.api.LedgerApi.AccountType;
 import io.github.essandhu.ledger.console.api.LedgerApi.Balance;
 import io.github.essandhu.ledger.console.api.LedgerApi.Entry;
+import io.github.essandhu.ledger.console.api.LedgerApi.FindingsPage;
+import io.github.essandhu.ledger.console.api.LedgerApi.Run;
+import io.github.essandhu.ledger.console.api.LedgerApi.RunPage;
 import io.github.essandhu.ledger.console.api.LedgerApi.StatementPage;
 
 /**
  * The console's one road to the ledger: every call rides the user's own token via the OAuth2
  * relay configured in {@code ApiClientConfig} — the console holds no credentials of its own
- * for the API, so the API's role matrix is the console's role matrix. 4xx/5xx surface as
+ * for the API, so the API's role matrix is the console's role matrix (nothing here or in
+ * {@code ConsoleSecurityConfig} re-checks a role, including for the one write below). 4xx/5xx surface as
  * {@code RestClientResponseException} and are rendered by {@code ConsoleErrorAdvice}; this
  * class adds no error translation of its own.
  *
@@ -97,5 +101,47 @@ public class LedgerApiClient {
                 .uri("/api/v1/journal-entries/{id}", id)
                 .retrieve()
                 .body(Entry.class);
+    }
+
+    /** The run history, newest first (M8c) — the API's own ordering, not re-sorted here. */
+    public RunPage runs(int page, int size) {
+        return client.get()
+                .uri(builder -> builder.path("/api/v1/reconciliation-runs")
+                        .queryParam("page", page)
+                        .queryParam("size", size)
+                        .build())
+                .retrieve()
+                .body(RunPage.class);
+    }
+
+    public Run run(UUID id) {
+        return client.get()
+                .uri("/api/v1/reconciliation-runs/{id}", id)
+                .retrieve()
+                .body(Run.class);
+    }
+
+    public FindingsPage findings(UUID runId, int page, int size) {
+        return client.get()
+                .uri(builder -> builder.path("/api/v1/reconciliation-runs/{id}/findings")
+                        .queryParam("page", page)
+                        .queryParam("size", size)
+                        .build(runId))
+                .retrieve()
+                .body(FindingsPage.class);
+    }
+
+    /**
+     * The console's ONE write (ADR-0007): start a sweep. Additive-safe — it appends a run row
+     * and its findings, moves no money — and it needs no {@code Idempotency-Key} because the
+     * API demands none: every trigger legitimately starts a fresh sweep. The user's own token
+     * carries the {@code LEDGER_ADMIN} the API requires, so a viewer's POST comes back 403
+     * from the LEDGER, not from a second copy of the role matrix living here.
+     */
+    public Run triggerRun() {
+        return client.post()
+                .uri("/api/v1/reconciliation-runs")
+                .retrieve()
+                .body(Run.class);
     }
 }

@@ -92,6 +92,88 @@ jobs:
           path: console/build/reports/jacoco/test/html
           if-no-files-found: ignore
 
+  console-e2e:
+    # M8c (ADR-0007): the browser lane — the real Keycloak authorization-code login, the token
+    # relay, the ID-token roles mapper deciding what renders, and the ops-only trigger, none of
+    # which the MockMvc suite can prove because each one is the piece it stubs. Deliberately NOT
+    # part of `check`: `:console:e2eTest` needs a live compose stack AND a host process on 8090,
+    # so wiring it into the required "Console build" job would break it.
+    # Same protection rule as the jobs above: once enrolled, this display name is a
+    # branch-protection key — never rename it. Enroll AFTER the first green run on main.
+    name: Console E2E
+    runs-on: ubuntu-latest
+    # Compose build + Gradle + apt + a browser download; the smoke job needs 20 for compose alone.
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@v6
+      - name: Validate compose file
+        run: docker compose config -q
+      - name: Bring up the full stack (waits on healthchecks)
+        run: docker compose up -d --build --wait --wait-timeout 300
+      # Per Playwright's own docs the browser binaries are NOT cached: a stale binary against a
+      # bumped Java binding fails in ways that look like test bugs.
+      - name: Install the chromium build Playwright expects
+        run: ./gradlew :console:installPlaywrightBrowsers
+      - name: Seed the drift the browser will detect
+        # Accounts + the ±12345 transfer + a superuser +7 on one snapshot, left UNSWEPT: the
+        # sweep that convicts it is the one the e2e test starts from a button.
+        run: scripts/e2e-fixture.sh
+      - name: Start the console on 8090
+        # A jar, not `bootRun &`: killing a backgrounded Gradle leaves the forked application JVM
+        # alive, and the daemon plus configuration cache make backgrounded bootRun fragile in CI.
+        # Keycloak is already healthy (compose --wait above), which the console requires at
+        # STARTUP — Boot's OAuth2 client discovers the issuer eagerly (ADR-0007).
+        run: |
+          set -euo pipefail
+          ./gradlew :console:bootJar
+          # The `java` plugin also leaves a `-plain` jar beside the boot jar, so a bare
+          # console-*.jar glob resolves to TWO paths and `java -jar` fails on the pair.
+          jar=$(find console/build/libs -name 'console-*.jar' -not -name '*-plain.jar')
+          java -jar "$jar" > console.log 2>&1 &
+          echo $! > console.pid
+          # Bounded poll, then fail loudly with the log — never let the e2e lane time out
+          # against a console that never came up. Capture-then-grep, as in the smoke job:
+          # under pipefail `curl | grep -q` can fail spuriously with 141 when grep exits at
+          # first match and curl catches SIGPIPE.
+          for _ in $(seq 1 60); do
+            health=$(curl -sf http://localhost:8090/actuator/health || true)
+            if grep -q '"status":"UP"' <<< "$health"; then
+              echo "console UP on 8090"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "console did not come up on 8090 within 120s:"
+          cat console.log
+          exit 1
+      - name: Drive the browser
+        run: ./gradlew :console:e2eTest
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: playwright-screenshots
+          path: console/build/reports/playwright
+          if-no-files-found: ignore
+      - name: Console log on failure
+        if: failure()
+        run: cat console.log
+      # Stop the host process BEFORE tearing the stack down, so its shutdown does not race a
+      # disappearing Keycloak and bury the real failure under connection errors.
+      - name: Stop the console
+        if: always()
+        run: kill "$(cat console.pid)" || true
+      - name: Dump stack logs on failure
+        if: failure()
+        run: docker compose logs
+      - name: Tear down
+        if: always()
+        run: docker compose down -v
+
   smoke:
     name: docker-compose smoke test
     runs-on: ubuntu-latest

@@ -11,6 +11,7 @@ import java.util.UUID;
 
 import io.github.essandhu.ledger.application.port.in.PageSpec;
 import io.github.essandhu.ledger.application.port.in.ReconciliationFindingsPage;
+import io.github.essandhu.ledger.application.port.in.ReconciliationRunPage;
 import io.github.essandhu.ledger.application.port.out.BalanceComparison;
 import io.github.essandhu.ledger.application.port.out.BalanceRepository;
 import io.github.essandhu.ledger.application.port.out.ReconciliationFinding;
@@ -20,9 +21,10 @@ import io.github.essandhu.ledger.application.port.out.ReconciliationRun;
 /**
  * In-memory {@link ReconciliationRepository} that ENFORCES the port contracts the adapter gets
  * from the database: run ids are unique on insert, finish/fail touch exactly one RUNNING row
- * (the V5 RUNNING-guard), findings are unique per (run, account), and the comparison keyset
- * pages in the database's uuid order — derived from
- * {@link BalanceRepository#UUID_BYTEWISE_ORDER}, the ONE Java-side definition of that order.
+ * (the V5 RUNNING-guard), findings are unique per (run, account), the comparison keyset
+ * pages in the database's uuid order, and the run history pages NEWEST FIRST — all uuid
+ * ordering derived from {@link BalanceRepository#UUID_BYTEWISE_ORDER}, the ONE Java-side
+ * definition of that order.
  */
 public class FakeReconciliationRepository implements ReconciliationRepository {
 
@@ -134,6 +136,22 @@ public class FakeReconciliationRepository implements ReconciliationRepository {
     @Override
     public IntegrityCounts integrityCounts() {
         return integrityCounts;
+    }
+
+    @Override
+    public ReconciliationRunPage runs(PageSpec page) {
+        // Newest first, enforced here too: the adapter gets the order from a backwards primary
+        // key scan, so a fake that preserved insertion order would let an ordering regression
+        // pass every unit test.
+        List<ReconciliationRun> newestFirst = runs.values().stream()
+                .sorted(Comparator.comparing(ReconciliationRun::id,
+                        BalanceRepository.UUID_BYTEWISE_ORDER).reversed())
+                .toList();
+        List<ReconciliationRun> content = newestFirst.stream()
+                .skip((long) page.page() * page.size())
+                .limit(page.size())
+                .toList();
+        return new ReconciliationRunPage(content, page.page(), page.size(), newestFirst.size());
     }
 
     @Override

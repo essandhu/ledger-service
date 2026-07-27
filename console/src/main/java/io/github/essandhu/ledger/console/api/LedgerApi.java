@@ -78,4 +78,47 @@ public final class LedgerApi {
     public record Entry(UUID id, EntryType entryType, String description, UUID reversalOf,
             String createdBy, Instant postedAt, List<Posting> postings) {
     }
+
+    public enum RunStatus {
+        RUNNING, CLEAN, DRIFT, FAILED
+    }
+
+    /**
+     * One reconciliation sweep (I15). {@code finishedAt} and every result count are ABSENT —
+     * hence boxed and nullable here — until the run has a verdict: a RUNNING row observed
+     * mid-sweep and a FAILED row simply have less to say, and zeroes would read as "checked
+     * nothing, found nothing" instead of "did not finish" (the core's own NON_NULL posture).
+     */
+    public record Run(UUID id, RunStatus status, Instant startedAt, Instant finishedAt,
+            String triggeredBy, Long accountsChecked, Long driftCount,
+            Long currencyMismatchCount, Long postedAtMismatchCount,
+            Long unbalancedCurrencyCount) {
+    }
+
+    /** The run history, NEWEST first as the API orders it (descending id ⇒ reverse chronological). */
+    public record RunPage(List<Run> content, int page, int size, long totalElements) {
+
+        /** The API sends no totalPages — computed here, as on {@link AccountPage}. */
+        public long totalPages() {
+            return size == 0 ? 0 : Math.ceilDiv(totalElements, size);
+        }
+    }
+
+    /**
+     * One drifted account in one sweep: the snapshot pair the run saw, the pair it recomputed
+     * from postings, and {@code delta = snapshotBalance − computedBalance}. Deliberately NO
+     * currency field — the API's finding carries none, so the console renders bare minor units
+     * and says so, rather than inventing an exponent for a number it cannot attribute.
+     */
+    public record Finding(UUID id, UUID accountId, long snapshotBalance, long snapshotCount,
+            long computedBalance, long computedCount, long delta) {
+    }
+
+    /** One page of a run's findings, in detection order (id-ordered, UUIDv7). */
+    public record FindingsPage(List<Finding> content, int page, int size, long totalElements) {
+
+        public long totalPages() {
+            return size == 0 ? 0 : Math.ceilDiv(totalElements, size);
+        }
+    }
 }

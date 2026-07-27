@@ -339,6 +339,28 @@ td.empty {
   text-decoration: line-through;
 }
 
+/* Run verdicts (M8c). CLEAN reads like ACTIVE; DRIFT is the one badge meant to alarm;
+   FAILED is grave, not alarming — the sweep did not finish, which is a different fact. */
+.status-clean {
+  color: var(--green-deep);
+  background: var(--chip-bg);
+}
+
+.status-running {
+  color: #1c5f8a;
+  background: #eaf2f8;
+}
+
+.status-drift {
+  color: #8a3b2e;
+  background: #f8efec;
+}
+
+.status-failed {
+  color: var(--ink-soft);
+  background: #ececea;
+}
+
 .side-chip {
   font-family: var(--mono);
   font-size: 0.75rem;
@@ -558,6 +580,54 @@ td.empty {
   margin: var(--space-2) 0 0;
   font-size: 0.875rem;
   color: var(--ink-soft);
+}
+
+/* Reconciliation (M8c): the ops-only trigger, its error slot, the run's count grid, and the
+   two cells that carry the drift — the delta and a diverged posting watermark. */
+.trigger {
+  border: 1px solid var(--green);
+  border-radius: 6px;
+  background: var(--chip-bg);
+  color: var(--green-deep);
+  font-weight: 600;
+  padding: var(--space-1) var(--space-3);
+  cursor: pointer;
+}
+
+.trigger:hover {
+  background: #fff;
+}
+
+.trigger-problem:not(:empty) {
+  padding: 0 var(--space-3) var(--space-2);
+}
+
+.run-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  margin: var(--space-3) 0 0;
+}
+
+.run-counts dt {
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.run-counts dd {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+td.delta {
+  font-weight: 600;
+  color: #8a3b2e;
+}
+
+td.drifted {
+  color: #8a3b2e;
 }
 
 /* Error card */

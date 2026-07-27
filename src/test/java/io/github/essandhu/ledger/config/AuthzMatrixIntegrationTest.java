@@ -251,9 +251,17 @@ class AuthzMatrixIntegrationTest {
                 new Cell("HEAD", "RUN_FINDINGS", NO_ROLES, 403),
                 new Cell("HEAD", "RUN_FINDINGS", "LEDGER_READ", 200),
 
-                // The API contract defines no reconciliation-runs collection listing — the namespace
-                // backstop holds it, even for LEDGER_READ (the journal-entries precedent).
-                new Cell("GET", "/api/v1/reconciliation-runs", "LEDGER_READ", 403),
+                // M8c added the collection listing (the run history the console pages through):
+                // a LEDGER_READ like every other read, where the namespace backstop denied it
+                // through M6/M7. The full cell set is the proof the matcher is explicit and
+                // scoped — ADMIN triggering a sweep still cannot read its own history back.
+                new Cell("GET", "/api/v1/reconciliation-runs", NONE, 401),
+                new Cell("GET", "/api/v1/reconciliation-runs", NO_ROLES, 403),
+                new Cell("GET", "/api/v1/reconciliation-runs", "LEDGER_READ", 200),
+                new Cell("GET", "/api/v1/reconciliation-runs", "LEDGER_WRITE", 403),
+                new Cell("GET", "/api/v1/reconciliation-runs", "LEDGER_ADMIN", 403),
+                new Cell("HEAD", "/api/v1/reconciliation-runs", NO_ROLES, 403),
+                new Cell("HEAD", "/api/v1/reconciliation-runs", "LEDGER_READ", 200),
 
                 // springdoc surfaces: any authenticated principal, no role required
                 new Cell("GET", "/v3/api-docs", NONE, 401),

@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments :: head('Ledger console — reconciliation run')}"></head>
+<body>
+<header th:replace="~{fragments :: topbar('reconciliation')}"></header>
+
+<main class="wide">
+    <section class="identity-card" aria-labelledby="run-heading">
+        <header>
+            <span id="run-heading">Reconciliation run</span>
+            <span class="folio mono" th:text="${run.run.id}">9b2e-uuid</span>
+        </header>
+        <div class="identity-body">
+            <p class="account-meta">
+                <span th:class="|status-badge status-${run.statusCss}|"
+                      th:text="${run.run.status}">DRIFT</span>
+                <span>triggered by <span class="mono" th:text="${run.run.triggeredBy}">ops</span></span>
+            </p>
+            <p class="account-times">
+                started <time th:attr="datetime=${run.run.startedAt}"
+                              th:text="${run.run.startedAt}">2026-07-27T12:00:00Z</time>
+                <th:block th:if="${run.run.finishedAt}"> · finished
+                    <time th:attr="datetime=${run.run.finishedAt}"
+                          th:text="${run.run.finishedAt}">2026-07-27T12:00:01Z</time>
+                </th:block>
+                <th:block th:unless="${run.run.finishedAt}"> · not finished</th:block>
+            </p>
+
+            <!-- The five counts a finished sweep reports. A RUNNING or FAILED run has none of
+                 them, and saying so beats printing five zeroes that would read as "all clear". -->
+            <!-- `!= null`, never a bare th:if on the number: Thymeleaf treats a ZERO Number as
+                 false, and a CLEAN sweep of an empty ledger legitimately checked 0 accounts —
+                 which would hide its counts and claim it never reached a verdict. -->
+            <dl class="run-counts" th:if="${run.run.accountsChecked != null}">
+                <div><dt>Accounts checked</dt>
+                    <dd class="mono" th:text="${run.run.accountsChecked}">3</dd></div>
+                <div><dt>Drifted accounts</dt>
+                    <dd class="mono" th:text="${run.run.driftCount}">1</dd></div>
+                <div><dt>Currency mismatches</dt>
+                    <dd class="mono" th:text="${run.run.currencyMismatchCount}">0</dd></div>
+                <div><dt>Posted-at mismatches</dt>
+                    <dd class="mono" th:text="${run.run.postedAtMismatchCount}">0</dd></div>
+                <div><dt>Unbalanced currencies</dt>
+                    <dd class="mono" th:text="${run.run.unbalancedCurrencyCount}">0</dd></div>
+            </dl>
+            <p class="no-roles" th:unless="${run.run.accountsChecked != null}">
+                This run reports no counts — a sweep records them only once it reaches a
+                verdict, so a run still in flight or one that died mid-sweep has none.
+            </p>
+        </div>
+    </section>
+
+    <section class="panel" aria-labelledby="findings-heading">
+        <header class="panel-head">
+            <h1 id="findings-heading">Findings</h1>
+            <a th:href="@{/reconciliation}">← All runs</a>
+        </header>
+        <p class="caption">One row per drifted account, in detection order. The snapshot pair
+            is what the ledger had stored; the computed pair is what its postings actually sum
+            to; the delta is snapshot − computed. All figures are raw minor units, debit-positive
+            — a finding carries no currency, so the console does not pretend to know its
+            exponent.</p>
+
+        <div class="table-scroll">
+            <table class="ruled">
+                <thead>
+                <tr>
+                    <th>Account</th>
+                    <th class="num">Snapshot balance</th><th class="num">Snapshot count</th>
+                    <th class="num">Computed balance</th><th class="num">Computed count</th>
+                    <th class="num">Delta</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr th:each="finding : ${findings}">
+                    <td><a class="mono" th:href="@{/accounts/{id}(id=${finding.accountId})}"
+                           th:text="${#strings.substring(finding.accountId, 0, 8)}">9b2e1a70</a></td>
+                    <td class="num mono" th:text="${finding.snapshotBalance}">12352</td>
+                    <!-- The watermark half of ADR-0002: a compensating corruption can leave the
+                         balances equal while the counts diverge, so the count drift is marked. -->
+                    <td class="num mono" th:classappend="${finding.countDrift} ? 'drifted'"
+                        th:text="${finding.snapshotCount}">1</td>
+                    <td class="num mono" th:text="${finding.computedBalance}">12345</td>
+                    <td class="num mono" th:classappend="${finding.countDrift} ? 'drifted'"
+                        th:text="${finding.computedCount}">1</td>
+                    <td class="num mono delta" th:text="${finding.delta}">7</td>
+                </tr>
+                <tr th:if="${#lists.isEmpty(findings)}">
+                    <td colspan="6" class="empty">No findings on this run — every account's
+                        snapshot matched the sum of its postings.</td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <footer class="pager">
+            <a th:if="${hasPrevious}"
+               th:href="@{/reconciliation/runs/{id}(id=${runId}, page=${page - 1})}">← Previous</a>
+            <span class="pager-status"
+                  th:text="|Page ${page + 1} of ${totalPages == 0 ? 1 : totalPages} · ${totalElements} findings|">Page 1 of 1 · 1 findings</span>
+            <a th:if="${hasNext}"
+               th:href="@{/reconciliation/runs/{id}(id=${runId}, page=${page + 1})}">Next →</a>
+        </footer>
+    </section>
+</main>
+
+<th:block th:replace="~{fragments :: scripts}"></th:block>
+</body>
+</html>

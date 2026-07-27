@@ -7,24 +7,28 @@ import org.springframework.transaction.annotation.Transactional;
 
 import io.github.essandhu.ledger.application.port.in.GetReconciliationRunQuery;
 import io.github.essandhu.ledger.application.port.in.ListReconciliationFindingsQuery;
+import io.github.essandhu.ledger.application.port.in.ListReconciliationRunsQuery;
 import io.github.essandhu.ledger.application.port.in.PageSpec;
 import io.github.essandhu.ledger.application.port.in.ReconcileBalancesUseCase;
 import io.github.essandhu.ledger.application.port.in.ReconciliationFindingsPage;
 import io.github.essandhu.ledger.application.port.in.ReconciliationRunNotFound;
+import io.github.essandhu.ledger.application.port.in.ReconciliationRunPage;
 import io.github.essandhu.ledger.application.port.out.IdGenerator;
 import io.github.essandhu.ledger.application.port.out.ReconciliationRepository;
 import io.github.essandhu.ledger.application.port.out.ReconciliationRun;
 import io.github.essandhu.ledger.application.port.out.ReconciliationTrigger;
 
 /**
- * The caller-facing reconciliation use cases (M6): trigger a sweep, read a run, list
- * its findings. The sweep itself — chunking, comparisons, findings, the run record — happens
+ * The caller-facing reconciliation use cases (M6, plus the run listing at M8c): trigger a
+ * sweep, read a run, list the run history, list a run's findings. The sweep itself —
+ * chunking, comparisons, findings, the run record — happens
  * behind {@link ReconciliationTrigger} (the Batch adapter) and
  * {@link ReconciliationRunService} (the job's record-keeper); this service is deliberately
  * thin so the core's reconciliation surface stays framework-free.
  */
 public class ReconciliationService implements ReconcileBalancesUseCase,
-        GetReconciliationRunQuery, ListReconciliationFindingsQuery {
+        GetReconciliationRunQuery, ListReconciliationRunsQuery,
+        ListReconciliationFindingsQuery {
 
     private final ReconciliationTrigger trigger;
     private final ReconciliationRepository reconciliation;
@@ -61,6 +65,13 @@ public class ReconciliationService implements ReconcileBalancesUseCase,
     public ReconciliationRun run(UUID runId) {
         return reconciliation.findRun(runId)
                 .orElseThrow(() -> new ReconciliationRunNotFound(runId));
+    }
+
+    @Override
+    @PreAuthorize("hasRole('LEDGER_READ')")
+    @Transactional(readOnly = true)
+    public ReconciliationRunPage runs(PageSpec page) {
+        return reconciliation.runs(page);
     }
 
     @Override

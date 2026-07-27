@@ -158,6 +158,56 @@ explicitly (suppressing the registrar's), and that explicitness turned out to be
 spring-security-test's `oidcLogin()` seam and the relay tests reach the manager only because
 it is the unique bean (`ApiClientConfig` records why).
 
+## M8c landing (2026-07-27) — five decisions taken while building the reconciliation surface
+
+1. **The run history is the API's only descending listing.** The console needed a collection GET
+   (`GET /api/v1/reconciliation-runs`) that PLAN §5 deliberately never had — the `/api/v1`
+   namespace backstop was denying it, so the endpoint is a real core change with real ripples
+   (matcher, I13 matrix rows, OpenAPI assertion, the layer-2 method-security cell). It pages
+   **newest first**, unlike accounts and findings: an append-only operational log is read from
+   its new end, and "what did the last sweep say?" must be page 0 rather than the last page of
+   an unknown number. Ordering is descending **id**, not `started_at` — UUIDv7 makes them the
+   same order, and V5 gives the table no index beyond its primary key, so a backwards scan of
+   that key serves it with no sort node and no index to justify.
+2. **The sweep trigger is authorized once, by the ledger.** `sec:authorize` hides the button
+   from anyone without `LEDGER_ADMIN`, but the console adds **no** role rule of its own: a
+   hand-rolled POST rides the user's token to the API and comes back 403, rendered as the
+   problem document it is. A `hasRole` matcher in `ConsoleSecurityConfig` was considered and
+   rejected — it would fork the role matrix into a second place that can drift from the
+   authority. The console's job is to not *offer* what will be refused, not to re-adjudicate it.
+   This is also the first exercise of `thymeleaf-extras-springsecurity6` (adopted at M8a on the
+   BOM's word): the dialect is now **verified** working on Boot 4.1.0 with Security 7.1.
+3. **Findings render as bare minor units.** The API's finding carries no currency, so there is
+   no exponent the console may honestly apply — the one place the money contract deliberately
+   does *not* apply, and the table says so rather than inventing a decimal point.
+4. **The browser lane is the one verification task outside `check`.** `:console:e2eTest` needs a
+   live compose stack *and* a host process on 8090, so wiring it in the way the root project
+   wires `concurrencyTest` would break `./gradlew build` and the required "Console build" job.
+   (Not the Docker image build — that runs `gradle :bootJar`, root-scoped, whose task graph
+   contains no `check` at all.) The `@Tag("e2e")` marker and `tasks.test`'s matching `excludeTags`
+   land together, deliberately: either alone is a broken lane. Playwright-Java is pinned at
+   **1.61.0** — the latest Java binding on Maven Central (verified against repo1
+   `maven-metadata.xml`, 2026-07-27); the npm line runs ahead at 1.62.0 and is not evidence for
+   this artifact. Plain `@BeforeAll`/`@AfterAll`, never `@UsePlaywright` (experimental,
+   upstream-tested only on Jupiter 5.14 — ADR-0005's discipline). Keycloak's stock-theme
+   selectors (`#username`, `#password`, `#kc-login`) were re-verified against the running
+   26.7.0 container at write time, and the browser navigates `localhost:8090`, never
+   `127.0.0.1` — the realm's redirect-URI list is exact-match string comparison.
+5. **The trigger answers two callers with one handler.** htmx gets `204 + HX-Redirect`; a
+   JavaScript-off form post gets a plain `303`. Both land on the run just created. htmx would
+   otherwise follow the 303 at the XHR level and hand a whole page to a swap target, and the
+   confirm dialog has to be `hx-confirm` because an inline `onsubmit` needs a CSP this console
+   deliberately does not grant.
+
+Accepted trade-off, on record: the e2e lane's drift is seeded out of band by
+`scripts/e2e-fixture.sh` (superuser SQL — ADR-0002's point is that nothing else *can* create
+drift), so the lane depends on a fixture step rather than being self-contained. The alternative,
+driving psql from inside the test, would put Docker orchestration in a browser test. Note that
+`scripts/demo.sh --console` needs no such step and no deviation from the existing walkthrough:
+the demo repairs the snapshot, but the DRIFT run and its finding remain — runs are append-only
+and findings are write-once, so delta 7 is visible in the console permanently, which is a
+better demonstration of the audit model than a drift left unrepaired would have been.
+
 ## Proof
 
 - `WhoamiPageTest`: unauthenticated requests bounce to Keycloak; the `ops` session renders the

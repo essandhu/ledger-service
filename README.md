@@ -167,6 +167,7 @@ roles in Keycloak are the convenience path.
 | `GET /accounts/{id}/postings` — keyset-paginated, account-bound opaque cursor | `LEDGER_READ` |
 | `POST /reconciliation-runs` — synchronous sweep, `201` whatever the verdict | `LEDGER_ADMIN` |
 | `GET /reconciliation-runs/{id}[/findings]` | `LEDGER_READ` |
+| `GET /reconciliation-runs?page=&size=` — run history, **newest first** (descending id = reverse chronological) | `LEDGER_READ` |
 | `GET /actuator/metrics` · `GET /actuator/prometheus` | `LEDGER_METRICS` ([ADR-0006](docs/adr/ADR-0006-observability-exposure.md)) |
 
 **Idempotency in one paragraph** (full text in the OpenAPI spec, [ADR-0004](docs/adr/ADR-0004-idempotency.md)):
@@ -196,6 +197,7 @@ the demo script additionally wants `jq`).
 ```sh
 docker compose up -d --build --wait   # PostgreSQL 18 + Keycloak (realm pre-provisioned) + the service
 ./gradlew build                       # every suite in both core lanes + the console suite + both coverage gates
+                                      # (except the console's browser lane — it needs a running console; see Testing & CI)
 ```
 
 Dev endpoints: service `http://localhost:8080` · Keycloak `http://localhost:8081`
@@ -256,6 +258,46 @@ sweep convicted it. The capture script repairs the snapshot by recomputation and
 > page). Reset with `docker compose down -v` (or run `scripts/demo.sh`, which always starts
 > fresh).
 
+## Console
+
+A read-only web console for the ledger's actual audience — ops and finance — at
+`http://localhost:8090`. It is a **separate Spring Boot app** that logs users in against
+Keycloak (authorization code) and calls this API with the user's own token: the core stays a
+pure resource server, its security posture unchanged, and the console becomes the API's first
+real consumer ([ADR-0007](docs/adr/ADR-0007-read-only-console.md) records why not a SPA, why not
+an embedded UI, and the six sub-decisions underneath).
+
+```sh
+docker compose up -d --build --wait   # the console needs Keycloak alive at STARTUP
+./gradlew :console:bootRun            # then http://localhost:8090 — sign in as ops/ops
+```
+
+Server-rendered Thymeleaf with htmx as a vendored static file — no CORS surface on the core, no
+second toolchain, no API-versioning pressure invented by our own frontend. The pages are a
+window onto the invariants rather than a CRUD skin:
+
+| Page | What it makes visible |
+|---|---|
+| Accounts → account detail | the **natural** balance (raw × direction of type — a LIABILITY at raw −12345 reads +123.45) beside the raw figure, an as-of picker, and the keyset statement with htmx load-more |
+| Entry inspector | the legs of an entry summing to a rendered **zero**, per currency — I1, on screen |
+| Reconciliation → run history → findings | snapshot vs computed vs delta — **I15**, on screen. Newest run first; each finding links back to the drifted account |
+| Whoami | the no-hierarchy role model as chips: every `LEDGER_*` grant the API checks, and a dashed `CONSOLE_*` composite that merely expands to them |
+
+Two demo users, both sides of the role matrix: `ops`/`ops` (composite `CONSOLE_OPS` →
+`LEDGER_READ` + `LEDGER_ADMIN` + `LEDGER_METRICS`) and `viewer`/`viewer` (`LEDGER_READ` only).
+The one permitted action is triggering a reconciliation sweep — additive-safe audit history, not
+money movement, so "read-only" stays honest where it matters. A viewer never sees the button; a
+viewer who posts anyway is refused **by the ledger**, not by a second copy of the role matrix
+living in the console, and that 403 renders as the problem document it is. Money exponents are
+console-owned (JPY 0, EUR 2, BHD 3 — closing the
+[ADR-0001](docs/adr/ADR-0001-money-representation.md) loop), UTC instants render browser-local,
+and every API failure surfaces its RFC 9457 problem body rather than a generic apology.
+
+Existing stacks need the realm refresh noted above (`docker compose down -v`) before browser
+login works. `scripts/demo.sh --console` prints the URL and credentials after the walkthrough —
+and the drift finding it points you at is still there after the demo repairs the snapshot,
+because findings are write-once and the run history is append-only.
+
 ## Testing & CI
 
 | Lane | Contents | Where |
@@ -263,7 +305,8 @@ sweep convicted it. The capture script repairs the snapshot by recomputation and
 | default (`./gradlew test`) | unit, property, ArchUnit, Testcontainers integration (one context, one PostgreSQL) | CI "Build, test, coverage gate" |
 | stress (`./gradlew concurrencyTest`) | the I6/I7/I8/I17 hammers — never cached, re-samples interleavings every run | CI "Concurrency proof" |
 | smoke | compose up + scripted probes over the real Keycloak issuer, including the drift demo | CI "docker-compose smoke test" |
-| console (`./gradlew :console:build`) | the read-only console's suite — login chain, role rendering, its own coverage gate | CI "Console build" |
+| console (`./gradlew :console:build`) | the read-only console's suite — login chain, role rendering, money/time/error presentation, the reconciliation surfaces, its own coverage gate | CI "Console build" |
+| console e2e (`./gradlew :console:e2eTest`) | a real browser (Playwright, chromium) through the real Keycloak login against the compose stack + the host-run console — deliberately outside `check` | CI "Console E2E" |
 
 The core's JaCoCo gate is `check`-fatal at **0.90 line coverage** overall, with a second exact
 rule: the domain packages hold **100%** — every uncovered domain line is treated as either a
