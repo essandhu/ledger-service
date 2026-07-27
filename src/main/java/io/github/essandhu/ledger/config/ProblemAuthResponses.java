@@ -13,7 +13,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
 /**
- * 401/403 as RFC 9457 problem documents. PLAN §5 declares ALL errors problem+json; Spring
+ * 401/403 as RFC 9457 problem documents. The API contract declares ALL errors problem+json; Spring
  * Security's defaults emit empty bodies with only the RFC 6750 {@code WWW-Authenticate} header.
  * Both conventions are kept: the bearer delegates set status + header, then a constant problem
  * body is written. Bodies are fixed strings on purpose — no user input, no serializer

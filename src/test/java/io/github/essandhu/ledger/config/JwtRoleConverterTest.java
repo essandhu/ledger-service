@@ -12,7 +12,7 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * The claim-to-authority mapping (PLAN §7): Keycloak realm roles arrive under
+ * The claim-to-authority mapping: Keycloak realm roles arrive under
  * {@code realm_access.roles}; only {@code LEDGER_*} roles become authorities, prefixed
  * {@code ROLE_}. This unit test is one leg of the I13 proof triangulation — the integration
  * matrix routes its minted JWTs through this same converter, and the CI smoke exercises the

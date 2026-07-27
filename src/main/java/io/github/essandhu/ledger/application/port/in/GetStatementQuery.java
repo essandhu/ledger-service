@@ -3,10 +3,10 @@ package io.github.essandhu.ledger.application.port.in;
 import io.github.essandhu.ledger.domain.model.AccountId;
 
 /**
- * {@code GET /api/v1/accounts/{id}/postings} (PLAN §5): one account's statement — the
+ * {@code GET /api/v1/accounts/{id}/postings}: one account's statement — the
  * chronological excerpt of its postings — keyset-paginated on {@code (posted_at, id)}, stable
  * under concurrent appends (new postings only ever sort after every position already handed
- * out, PLAN §4.6).
+ * out).
  */
 public interface GetStatementQuery {
 

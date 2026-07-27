@@ -23,8 +23,8 @@ import io.github.essandhu.ledger.domain.model.EntryId;
  * removal by managed instance. No equals/hashCode: entities are never held in sets or
  * compared, and dead code is a coverage and correctness liability.
  *
- * <p>First composite key in the schema: the (created_by, idem_key) scope IS the primary key
- * (PLAN §4.3), expressed as a record {@code @IdClass}. {@link Persistable} states isNew()=true
+ * <p>First composite key in the schema: the (created_by, idem_key) scope IS the primary key,
+ * expressed as a record {@code @IdClass}. {@link Persistable} states isNew()=true
  * for the same append-only reason as {@code JournalEntryJpaEntity}: every instance
  * {@link #fromRecord} builds is new, and without the declaration save() would merge-probe the
  * hottest write path.

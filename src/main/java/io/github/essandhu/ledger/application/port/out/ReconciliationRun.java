@@ -28,7 +28,7 @@ public record ReconciliationRun(
 
     /**
      * The counts a finished sweep reports: accounts compared, drifted accounts (finding rows),
-     * the two denormalization re-verifications (PLAN §4.3), and the I5 global per-currency
+     * the two denormalization re-verifications, and the I5 global per-currency
      * zero-sum re-check (ADR-0002's Proof section).
      */
     public record Results(

@@ -8,7 +8,7 @@
 
 From M1 through M6 the metric surfaces (`/actuator/metrics`, `/actuator/prometheus`) sat on the
 application port behind `anyRequest().authenticated()` — reachable by ANY authenticated
-principal, including one holding zero `LEDGER_*` roles. PLAN §5 had sketched
+principal, including one holding zero `LEDGER_*` roles. The original plan had sketched
 "management-port-internal" as the target; the deviation was recorded in `SecurityConfig`'s
 javadoc and deferred to M7 as ops polish. M7 also adds the observability stack (Prometheus +
 Grafana in a compose profile), which turns the question concrete: *who may scrape, and how does
@@ -24,7 +24,7 @@ Two sub-decisions, resolved together:
 - The test harness is the constitution: `@LedgerIntegrationTest` is MockMvc in a MOCK web
   environment — one Spring context, one PostgreSQL container, deliberately. Whatever ships must
   be provable inside that harness.
-- No role hierarchy anywhere (PLAN §7): ADMIN cannot read, WRITE cannot read — a metrics
+- No role hierarchy anywhere ([README §API](../../README.md#api)): ADMIN cannot read, WRITE cannot read — a metrics
   decision that quietly reintroduced "any strong principal can scrape" would break the posture.
 - The compose healthcheck, the CI smoke job, and the demo script all probe actuator endpoints
   from specific vantage points; an "internal" port that must be published anyway is theater.

@@ -1,4 +1,4 @@
--- I16 (M2): the journal tables (PLAN §4.3) — journal_entry, posting, account_balance — and the
+-- I16 (M2): the journal tables — journal_entry, posting, account_balance — and the
 -- I3 append-only grant model: the runtime role can record history but never rewrite it.
 --
 -- V2 forward-contract honored here: account_balance is created AND backfilled with one
@@ -18,7 +18,7 @@ CREATE TABLE journal_entry (
                                 CONSTRAINT journal_entry_type_valid CHECK
                                 (entry_type IN ('TRANSFER', 'JOURNAL', 'REVERSAL')),
     -- Optional; when present it obeys the same text rules as account.name (any-whitespace blank,
-    -- no control characters) at the larger 500-char budget (PLAN §4.3). NULL passes each CHECK by
+    -- no control characters) at the larger 500-char budget. NULL passes each CHECK by
     -- SQL three-valued logic, so no "IS NULL OR" noise is needed. Domain validates first; these
     -- mirror it as defense in depth against non-API writes (the V2 rationale).
     description     text        NULL
@@ -28,7 +28,7 @@ CREATE TABLE journal_entry (
                                 CHECK (description !~ '[[:cntrl:]]')
                                 CONSTRAINT journal_entry_description_max_length
                                 CHECK (char_length(description) <= 500),
-    -- Set IFF the entry is a REVERSAL (PLAN §4.1): boolean equality rejects both a REVERSAL
+    -- Set IFF the entry is a REVERSAL: boolean equality rejects both a REVERSAL
     -- without a target and a plain entry claiming one.
     reversal_of     uuid        NULL REFERENCES journal_entry (id),
     CONSTRAINT journal_entry_reversal_shape
@@ -37,9 +37,9 @@ CREATE TABLE journal_entry (
     -- birth (ADR-0004): long after M4's idempotency_record rows expire, this table — kept
     -- forever — remains the final guard against double-posting.
     idempotency_key text        NULL,
-    -- The JWT subject that posted the entry (PLAN §4.3); also the idempotency scope (ADR-0004).
+    -- The JWT subject that posted the entry; also the idempotency scope (ADR-0004).
     created_by      text        NOT NULL,
-    -- Assigned from the injected Clock while holding the balance locks (ADR-0003, PLAN §4.6).
+    -- Assigned from the injected Clock while holding the balance locks (ADR-0003).
     -- Deliberately NO DEFAULT now(): a database default would silently mask a missing Clock wire
     -- and reintroduce ambient time below the ArchUnit rule's visibility (the V2 principle).
     -- No version, no updated_at: rows are written exactly once (I3) — mutability columns would
@@ -86,21 +86,21 @@ CREATE TABLE posting (
     id         uuid        PRIMARY KEY,
     entry_id   uuid        NOT NULL REFERENCES journal_entry (id),
     account_id uuid        NOT NULL REFERENCES account (id),
-    -- Signed integer minor units, debit-positive (ADR-0001, PLAN §4.2). A zero leg moves
+    -- Signed integer minor units, debit-positive (ADR-0001). A zero leg moves
     -- nothing and means nothing — I2's database half; the domain rejects it first.
     amount     bigint      NOT NULL
                            CONSTRAINT posting_amount_nonzero CHECK (amount <> 0),
-    -- Denormalized copy of the account's currency (PLAN §4.3) so M3 statements and as-of reads
+    -- Denormalized copy of the account's currency so M3 statements and as-of reads
     -- never join account. The domain enforces the match at post time; M6 reconciliation
     -- re-verifies. Same text + CHECK shape rationale as V2's account.currency.
     currency   text        NOT NULL
                            CONSTRAINT posting_currency_shape CHECK (currency ~ '^[A-Z]{3}$'),
     -- Denormalized from the entry, for the statement index below; assigned under the balance
-    -- locks like the entry's (ADR-0003, PLAN §4.6).
+    -- locks like the entry's (ADR-0003).
     posted_at  timestamptz NOT NULL
 );
 
--- Covering path for M3 statements and as-of balance queries (PLAN §4.3): one account's postings
+-- Covering path for M3 statements and as-of balance queries: one account's postings
 -- in time order, with id as the deterministic tiebreak for equal timestamps.
 CREATE INDEX posting_account_statement ON posting (account_id, posted_at, id);
 -- Entry reassembly (GET /journal-entries/{id}) and the reverse side of the entry_id FK.

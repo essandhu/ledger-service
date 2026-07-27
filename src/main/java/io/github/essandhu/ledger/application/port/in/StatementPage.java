@@ -8,7 +8,7 @@ import io.github.essandhu.ledger.domain.model.Posting;
 
 /**
  * One page of statement lines in {@code (posted_at, id)} ascending order — domain postings
- * verbatim, raw signed amounts (PLAN §4.2 owns the client-facing sign story).
+ * verbatim, raw signed amounts (the sign convention owns the client-facing sign story).
  *
  * <p>{@code next} is ALWAYS the position to resume from (pinned at M3): the last line's
  * position when the page has content; the request's own cursor when it does not — so a

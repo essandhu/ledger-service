@@ -18,7 +18,7 @@ import io.github.essandhu.ledger.domain.model.Money;
  *
  * <p><b>Currency exponents.</b> {@link #currencies()} always spans JPY (exponent 0) and BHD
  * (exponent 3) alongside EUR/USD (exponent 2), so any hidden "two decimal places" assumption
- * dies in generation (TEST-STRATEGY §2.2). Minor-unit amounts are exponent-blind by design
+ * dies in generation. Minor-unit amounts are exponent-blind by design
  * (ADR-0001) — these generators keep them honest about it.
  *
  * <p><b>Near-limit amounts.</b> {@link #amounts()} reserves probability mass for bands hugging
@@ -27,7 +27,7 @@ import io.github.essandhu.ledger.domain.model.Money;
  * values would visit approximately never.
  *
  * <p>Balanced drafts are constructed per currency as k−1 random legs plus a closing leg
- * (PLAN §1: a multi-currency entry is legal iff EACH currency nets to zero), with leg amounts
+ * (a multi-currency entry is legal iff EACH currency nets to zero), with leg amounts
  * bounded so the closing sum cannot overflow — the generator must be incapable of manufacturing
  * an {@code AmountOverflow} of its own, or the I1 acceptance property would flake. Unbalanced
  * drafts are balanced drafts plus one nonzero perturbation, delta ±1 included prominently: I1
@@ -121,8 +121,7 @@ public final class Gens {
      * legs happen to sum to zero, the first is nudged off the axis so the closing leg stays
      * nonzero (I2 — the generator must never manufacture its own zero leg). Each currency draws
      * accounts from its own small pool, so same-account multi-leg entries occur and the drafts
-     * stay plausible for the end-to-end suites (an account holds exactly one currency,
-     * PLAN §4.1).
+     * stay plausible for the end-to-end suites (an account holds exactly one currency).
      *
      * <p>Returned as raw ingredients rather than an {@link EntryDraft}, because for the I1/I2
      * properties construction itself is the assertion under test.

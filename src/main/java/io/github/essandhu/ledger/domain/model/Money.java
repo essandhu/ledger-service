@@ -8,7 +8,7 @@ import io.github.essandhu.ledger.domain.error.CurrencyMismatch;
  * An exact amount of one currency, counted in minor units (ADR-0001): a {@code long} plus a
  * {@link CurrencyCode} — no float, no double, no BigDecimal. The exponent (JPY = 0, EUR = 2,
  * BHD = 3) is presentation owned by clients; arithmetic here neither knows nor cares, which is
- * exactly why nothing downstream may assume two decimal places (TEST-STRATEGY §2.2).
+ * exactly why nothing downstream may assume two decimal places.
  *
  * <p>All arithmetic is checked: {@link #plus} and {@link #negate} go through
  * {@link Math#addExact} / {@link Math#negateExact}, so 64-bit overflow surfaces as
@@ -20,7 +20,7 @@ import io.github.essandhu.ledger.domain.error.CurrencyMismatch;
  *
  * <p>Money never crosses currencies implicitly: {@link #plus} on mixed currencies throws
  * {@link CurrencyMismatch}. There is no exchange, no conversion, no common denominator —
- * per-currency zero-sum (I1) makes multi-currency entries legal without any of them (PLAN §1).
+ * per-currency zero-sum (I1) makes multi-currency entries legal without any of them.
  */
 public record Money(long amount, CurrencyCode currency) {
 
@@ -63,7 +63,7 @@ public record Money(long amount, CurrencyCode currency) {
         return amount == 0;
     }
 
-    /** −1, 0, or +1 — under the debit-positive convention (PLAN §4.2), +1 means a debit leg. */
+    /** −1, 0, or +1 — under the debit-positive convention, +1 means a debit leg. */
     public int signum() {
         return Long.signum(amount);
     }

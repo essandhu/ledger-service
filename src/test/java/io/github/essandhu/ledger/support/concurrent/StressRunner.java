@@ -13,21 +13,21 @@ import java.util.function.IntFunction;
 
 /**
  * The stress-run machinery of the M5 concurrency suite — deliberately boring machinery around
- * sharp assertions (TEST-STRATEGY §4). One shape for every workload: a fixed pool of workers,
+ * sharp assertions. One shape for every workload: a fixed pool of workers,
  * all ARMED first (submitted and parked on a start gate), then RELEASED simultaneously to
  * maximize collision probability, then awaited under a bounded overall timeout where a hang or
  * overrun IS a failure — that bound is the deadlock detector for I17 (a real deadlock would
  * also surface earlier as SQLSTATE 40P01 after PostgreSQL's {@code deadlock_timeout}, but the
  * bound catches the undetectable cousins: lock-wait pileups, pool starvation, a stuck worker).
  *
- * <p><b>Honesty rule, enforced structurally</b> (TEST-STRATEGY §4): workers return a VALUE
+ * <p><b>Honesty rule, enforced structurally</b>: workers return a VALUE
  * classifying their outcome — expected business rejections (an overdraft 422) are counted by
  * the test, not swallowed — and anything a worker THROWS is by definition unexpected and fails
  * the whole run with that throwable as the cause. Success is then asserted from database
  * state, never from client-side bookkeeping alone.
  *
- * <p><b>Sizing knobs</b> (TEST-STRATEGY §4: "thread count and iteration count are properties
- * so a nightly run can crank them"): {@code -Dledger.concurrency.threads} and
+ * <p><b>Sizing knobs</b> — thread count and iteration count are properties
+ * so a nightly run can crank them: {@code -Dledger.concurrency.threads} and
  * {@code -Dledger.concurrency.iterations} override every suite's defaults; the Gradle
  * {@code concurrencyTest} task forwards both into the forked JVM, same contract as the
  * property harness's seed/iterations knobs. Malformed values fail loudly — a crank that
@@ -120,14 +120,14 @@ public final class StressRunner {
                 } catch (TimeoutException hang) {
                     throw new AssertionError(
                             ("stress run overran its %s bound with worker %d (and possibly others) unfinished — "
-                                    + "a hang or unbounded lock wait IS the failure (TEST-STRATEGY §4, I17)")
+                                    + "a hang or unbounded lock wait IS the failure (I17)")
                                     .formatted(timeout, i), hang);
                 } catch (InterruptedException interrupted) {
                     Thread.currentThread().interrupt();
                     throw new AssertionError("interrupted awaiting stress worker " + i, interrupted);
                 } catch (java.util.concurrent.ExecutionException failed) {
                     throw new AssertionError(
-                            ("stress worker %d threw — unexpected by definition (TEST-STRATEGY §4's honesty rule: "
+                            ("stress worker %d threw — unexpected by definition (the stress-suite rules' honesty rule: "
                                     + "expected rejections are RETURN VALUES, anything thrown fails the run)")
                                     .formatted(i), failed.getCause());
                 }

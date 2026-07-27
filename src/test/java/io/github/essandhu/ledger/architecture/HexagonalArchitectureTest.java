@@ -26,11 +26,11 @@ import static com.tngtech.archunit.library.GeneralCodingRules.NO_CLASSES_SHOULD_
 import static com.tngtech.archunit.library.dependencies.SlicesRuleDefinition.slices;
 
 /**
- * I14: the hexagonal dependency rules (PLAN §3), initial set — extended as packages appear.
+ * I14: the hexagonal dependency rules, initial set — extended as packages appear.
  *
  * <p>Uses the ArchUnit <em>core</em> API from plain Jupiter tests: {@code archunit-junit5}'s
  * engine targets JUnit Platform 1.x and does not run on Boot 4.1's Platform 6
- * (TNG/ArchUnit#1556, TEST-STRATEGY §2). Same rules, no engine.
+ * (TNG/ArchUnit#1556). Same rules, no engine.
  */
 @Tag("architecture")
 @DisplayName("I14: hexagonal dependency rules")
@@ -60,7 +60,7 @@ class HexagonalArchitectureTest {
         classes().that().resideInAPackage(ROOT + ".domain..")
                 .should().onlyDependOnClassesThat()
                 .resideInAnyPackage("java..", ROOT + ".domain..")
-                .because("the domain core is framework-free (PLAN §3)")
+.because("the domain core is framework-free")
                 .check(PRODUCTION_CLASSES);
     }
 
@@ -74,11 +74,11 @@ class HexagonalArchitectureTest {
                         ROOT + ".domain..",
                         ROOT + ".application..",
                         "org.springframework.transaction.annotation..",
-                        // Method security on use-case entry points is mandated by PLAN §5;
+                        // Method security on use-case entry points is mandated by the API contract;
                         // like @Transactional it is declarative and container-interpreted.
                         "org.springframework.security.access.prepost..")
                 .because("declarative transaction and method-security annotations are the only "
-                        + "Spring dependencies allowed in the core (PLAN §3, §5)")
+                        + "Spring dependencies allowed in the core")
                 .check(PRODUCTION_CLASSES);
     }
 
@@ -96,7 +96,7 @@ class HexagonalArchitectureTest {
     void adapters_do_not_depend_on_each_other() {
         slices().matching(ROOT + ".adapter.(*)..")
                 .should().notDependOnEachOther()
-                .because("adapters may only meet through the application core (PLAN §3)")
+.because("adapters may only meet through the application core")
                 .check(PRODUCTION_CLASSES);
     }
 
@@ -110,7 +110,7 @@ class HexagonalArchitectureTest {
                         "org.hibernate..",
                         "org.springframework.data.jpa..",
                         "org.springframework.orm..")
-                .because("persistence technology is an adapter detail (PLAN §3)")
+.because("persistence technology is an adapter detail")
                 .check(PRODUCTION_CLASSES);
     }
 
@@ -160,7 +160,7 @@ class HexagonalArchitectureTest {
         classes().that(mapsAppendOnlyTable)
                 .should().beAnnotatedWith(Immutable.class)
                 .because("Hibernate must never dirty-check or UPDATE journal rows — the ORM layer "
-                        + "of the append-only guarantee (I3, PLAN §4.4; layers 1 and 3 are the "
+                        + "of the append-only guarantee (I3; layers 1 and 3 are the "
                         + "mutator-free domain records and the absent UPDATE/DELETE grants)")
                 .check(PRODUCTION_CLASSES);
     }
@@ -170,14 +170,13 @@ class HexagonalArchitectureTest {
     void micrometer_only_in_adapters_and_config() {
         // application_is_spring_free_except_transactions deliberately has NO micrometer
         // allowance: posting metrics live in the config-package decorator and the lock-wait
-        // timer in the persistence adapter (PLAN §8). This rule states that placement decision
+        // timer in the persistence adapter. This rule states that placement decision
         // positively, so a future "just inject MeterRegistry into the service" shortcut fails
         // here with the reason attached rather than only tripping the package-list rule above.
         noClasses().that().resideOutsideOfPackages(ROOT + ".adapter..", ROOT + ".config..")
                 .should().dependOnClassesThat().resideInAPackage("io.micrometer..")
                 .because("metrics are infrastructure: the domain and application core stay "
-                        + "micrometer-free; instrumentation wraps the core from config/adapters "
-                        + "(PLAN §3, §8)")
+                        + "micrometer-free; instrumentation wraps the core from config/adapters")
                 .check(PRODUCTION_CLASSES);
     }
 
@@ -188,7 +187,7 @@ class HexagonalArchitectureTest {
     }
 
     @Test
-    @DisplayName("ground rule (TEST-STRATEGY §1): time flows only through the injected Clock")
+    @DisplayName("ground rule: time flows only through the injected Clock")
     void no_ambient_time_reads() {
         DescribedPredicate<JavaMethodCall> ambientTimeRead =
                 new DescribedPredicate<>("read ambient time (zero-arg now(), currentTimeMillis, "
@@ -213,7 +212,7 @@ class HexagonalArchitectureTest {
                 };
 
         noClasses().should().callMethodWhere(ambientTimeRead)
-                .because("time must be injectable and controllable in tests (TEST-STRATEGY §1)")
+.because("time must be injectable and controllable in tests")
                 .check(PRODUCTION_CLASSES);
 
         DescribedPredicate<JavaConstructorCall> zeroArgDate =
@@ -226,7 +225,7 @@ class HexagonalArchitectureTest {
                 };
 
         noClasses().should().callConstructorWhere(zeroArgDate)
-                .because("time must be injectable and controllable in tests (TEST-STRATEGY §1)")
+.because("time must be injectable and controllable in tests")
                 .check(PRODUCTION_CLASSES);
 
         // System clocks may be constructed only where the Clock bean lives.
@@ -241,7 +240,7 @@ class HexagonalArchitectureTest {
 
         noClasses().that().resideOutsideOfPackage(ROOT + ".config..")
                 .should().callMethodWhere(systemClockConstruction)
-                .because("the config package is the single home of the Clock bean (PLAN §3.1)")
+.because("the config package is the single home of the Clock bean")
                 .check(PRODUCTION_CLASSES);
     }
 }

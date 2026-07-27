@@ -48,7 +48,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * cumulative UPDATE exactly (I4's mechanism), and {@code insertZero} seeds the snapshot row
  * without which the lock protocol dies (the V2 forward-contract). Port + TransactionTemplate +
  * DataSource style mirrors {@link OptimisticLockIntegrationTest}; all rows carry per-test
- * random ids and marker names (additive-safe shared-schema discipline, TEST-STRATEGY §2).
+ * random ids and marker names (additive-safe shared-schema discipline).
  */
 @LedgerIntegrationTest
 @DisplayName("ADR-0003: canonical-order balance locking and the ADR-0002 snapshot bump")
@@ -107,7 +107,7 @@ class BalanceLockIntegrationTest {
     }
 
     @Test
-    @DisplayName("PLAN §8: lock acquisition is timed — ledger.posting.lock.wait records a sample per lockBalances")
+    @DisplayName("The metrics contract: lock acquisition is timed — ledger.posting.lock.wait records a sample per lockBalances")
     void lock_wait_timer_records_each_acquisition() {
         AccountId id = accountWithZeroBalance(0x11);
 

@@ -6,7 +6,7 @@ import org.springframework.test.context.DynamicPropertyRegistrar;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
- * Shared PostgreSQL 18.4 container for integration tests (TEST-STRATEGY §1: no H2, ever).
+ * Shared PostgreSQL 18.4 container for integration tests (no H2, ever).
  *
  * <p>Deliberately <em>not</em> {@code @ServiceConnection}: a service connection would hand Spring
  * the container's bootstrap superuser for both the application datasource and Flyway, collapsing
@@ -15,9 +15,9 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  * credentials come from {@code application.yaml} — so tests run with exactly the production
  * privilege split ({@code ledger_app} runtime, {@code ledger_migrate} for Flyway; invariants
  * I3 / I16). The container lifecycle is still owned by the Spring context, so one container is
- * shared per cached context (TEST-STRATEGY §2).
+ * shared per cached context.
  *
- * <p><b>M1 measurement + decision (TEST-STRATEGY §2's open question):</b> all integration
+ * <p><b>M1 measurement + decision (the test-type rules' open question):</b> all integration
  * classes compose the identical annotation set via {@link LedgerIntegrationTest}, giving ONE
  * cached context and ONE container for the whole suite (verified: a single HikariPool /
  * EntityManagerFactory shutdown in the test log). Full {@code test} task incl. container

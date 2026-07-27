@@ -13,7 +13,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /**
  * Currency is a real, ISO-4217, money currency — not merely three uppercase letters. The
  * exponent spread (JPY = 0, BHD = 3) is deliberately included so nothing downstream can assume
- * two decimal places (TEST-STRATEGY §2.2 makes the same point for the M2 generators).
+ * two decimal places (the property-test rules make the same point for the M2 generators).
  */
 @DisplayName("CurrencyCode: ISO 4217 money currencies only")
 class CurrencyCodeTest {

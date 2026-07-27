@@ -39,7 +39,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 
 /**
- * I8 (serial) and I9 over the HTTP surface against real PostgreSQL (ADR-0004, PLAN §5): replay
+ * I8 (serial) and I9 over the HTTP surface against real PostgreSQL (ADR-0004): replay
  * answers 200 with the STORED original body byte for byte plus {@code Idempotency-Replayed:
  * true}; conflict answers 422 {@code idempotency-key-conflict} with zero side effects; the
  * concurrent duplicate serializes on the database and never double-posts. Key shape and the
@@ -209,7 +209,7 @@ class IdempotencyApiIntegrationTest {
                     .hasContentTypeCompatibleWith(MediaType.APPLICATION_JSON);
             assertThat(replay.getResponse().getHeader(REPLAYED_HEADER)).isEqualTo("true");
             assertThat(replay.getResponse().getHeader("Location"))
-                    .as("nothing was created by a replay — no Location (PLAN §5 M4 pin)")
+.as("nothing was created by a replay — no Location (the API contract M4 pin)")
                     .isNull();
             assertThat(body(replay))
                     .as("the STORED original response, byte for byte (ADR-0004)")
@@ -451,7 +451,7 @@ class IdempotencyApiIntegrationTest {
     }
 
     @Nested
-    @DisplayName("PLAN §8: the idempotency counters — and what they deliberately do NOT touch")
+    @DisplayName("The metrics contract: the idempotency counters — and what they deliberately do NOT touch")
     class Metrics {
 
         private double counterValue(String name) {
@@ -467,7 +467,7 @@ class IdempotencyApiIntegrationTest {
         }
 
         @Test
-        @DisplayName("replays and conflicts bump their own counters — and discard the duration sample, and stay out of the rejected vocabulary (PLAN §8 M4 pins)")
+        @DisplayName("replays and conflicts bump their own counters — and discard the duration sample, and stay out of the rejected vocabulary (the M4 metric pins)")
         void idempotency_counters_are_recorded_and_posting_series_stay_clean() {
             String subject = subject();
             String key = key();
@@ -601,7 +601,7 @@ class IdempotencyApiIntegrationTest {
         @DisplayName("duplicate transfers draining a strict account: the loser replays — never 422 overdraft against post-winner state")
         void simultaneous_same_key_transfers_replay_never_overdraft() throws Exception {
             String subject = subject();
-            // The overdraft side of a transfer is the CREDITED target (−amount raw, PLAN §5).
+            // The overdraft side of a transfer is the CREDITED target (−amount raw).
             // A strict target funded with EXACTLY the transferred amount: the winner drains
             // it to natural 0, and re-judging the duplicate against that state would file it
             // as an overdraft — the failure-mode inversion ADR-0004 warns about.

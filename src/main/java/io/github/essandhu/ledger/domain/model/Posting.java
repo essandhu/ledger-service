@@ -7,10 +7,10 @@ import io.github.essandhu.ledger.domain.error.ZeroAmountPosting;
 
 /**
  * One leg of a posted entry: a signed amount in minor units, debit-positive, against one
- * account (PLAN §4.1, §4.2). Immutable and mutator-free — layer 1 of I3 (layer 2 is the
+ * account. Immutable and mutator-free — layer 1 of I3 (layer 2 is the
  * {@code @Immutable} JPA mapping, layer 3 the absent UPDATE/DELETE grants). Carries its
  * entry's {@code postedAt} denormalized, mirroring the {@code posting.posted_at} column
- * (PLAN §4.3: posting rows answer M3's statement and as-of queries without joining the
+ * (posting rows answer M3's statement and as-of queries without joining the
  * header). Zero amounts are rejected here as well as in the draft (I2) — the
  * {@code posting_amount_nonzero} CHECK is the mirror at rest.
  */

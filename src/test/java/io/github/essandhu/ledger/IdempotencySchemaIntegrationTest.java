@@ -187,7 +187,7 @@ class IdempotencySchemaIntegrationTest {
         return granted;
     }
 
-    /** Marker-named fixture value (shared-schema discipline, TEST-STRATEGY §2). */
+    /** Marker-named fixture value (shared-schema discipline). */
     private static String marker(String label) {
         return "idem-schema-probe-" + label + "-" + UUID.randomUUID();
     }

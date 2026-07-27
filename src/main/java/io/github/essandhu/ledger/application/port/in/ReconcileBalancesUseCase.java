@@ -5,7 +5,7 @@ import java.util.Objects;
 import io.github.essandhu.ledger.application.port.out.ReconciliationRun;
 
 /**
- * POST /reconciliation-runs (PLAN §5, M6): run one reconciliation sweep NOW and return its
+ * POST /reconciliation-runs (M6): run one reconciliation sweep NOW and return its
  * recorded verdict. Synchronous by design — the response carries the CLEAN/DRIFT answer, which
  * is what makes the admin trigger a demo and an operational tool rather than a fire-and-poll
  * ceremony; the deliberate cost (a large ledger holds the request open) is recorded in

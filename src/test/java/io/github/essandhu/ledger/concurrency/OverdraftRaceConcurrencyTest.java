@@ -12,7 +12,7 @@ import io.github.essandhu.ledger.support.concurrent.StressRunner;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * I6, the racy half (TEST-STRATEGY §4, workload c): withdrawals racing over a small balance on
+ * I6, the racy half (workload c): withdrawals racing over a small balance on
  * an {@code allowNegative = false} account — WITH deposits racing them the other way. This is
  * ADR-0003's race #2 (two withdrawals both passing the check on a stale read) hammered
  * directly, and the mixed traffic is load-bearing: with withdrawals alone the balance is
@@ -25,7 +25,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * <p>Two verdicts, per the §4 design: the FINAL state (balance = funded + deposits − grants,
  * never negative), and the FULL posting history — replayed in ledger order {@code (posted_at,
  * id)}, the account's natural balance must be non-negative at every prefix, because
- * per-account posted_at order equals commit order by construction (PLAN §4.6). The honesty
+ * per-account posted_at order equals commit order by construction. The honesty
  * rule: deposit workers may see nothing but 201 (a deposit into a strict account is always
  * legal); withdrawal workers classify 201 and the typed 422 {@code overdraft}; any other
  * answer fails the run. Grant counts are read from the DATABASE, then cross-checked against

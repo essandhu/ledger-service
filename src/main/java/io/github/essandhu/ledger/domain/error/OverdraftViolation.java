@@ -4,7 +4,7 @@ import io.github.essandhu.ledger.domain.model.AccountId;
 
 /**
  * I6: an account with {@code allow_negative = false} may never carry a negative NATURAL balance
- * (PLAN §4.2 — the check reads {@code raw × direction}, so a credit-normal account overdraws
+ * (the check reads {@code raw × direction}, so a credit-normal account overdraws
  * upward in raw terms). Evaluated by the posting use case under the ordered account_balance
  * lock (ADR-0003), against the checked would-be balance; rejected requests fail with this
  * domain error, never with a lock or serialization error. Maps to 422. Carries the account and

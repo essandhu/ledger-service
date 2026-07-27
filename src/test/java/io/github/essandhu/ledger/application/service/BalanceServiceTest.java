@@ -41,7 +41,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * postings and NEVER the snapshot, plus the M3 statement contract — (from, to] window, keyset
  * order with BYTEWISE id ties, and the always-resumable next cursor. The SQL semantics
  * themselves are the persistence adapter's integration tests; the fakes reproduce them so the
- * service's orchestration is provable without Spring (TEST-STRATEGY §2.1).
+ * service's orchestration is provable without Spring.
  */
 @DisplayName("BalanceService: ADR-0002 read split and the M3 statement contract")
 class BalanceServiceTest {
@@ -107,7 +107,7 @@ class BalanceServiceTest {
     }
 
     @Test
-    @DisplayName("PLAN §4.2: a credit-normal account's natural balance flips the raw sign")
+    @DisplayName("The sign convention: a credit-normal account's natural balance flips the raw sign")
     void current_flips_sign_for_credit_normal_accounts() {
         AccountId wallet = seededAccount(MAIN, AccountType.LIABILITY);
         balances.seed(new AccountBalance(wallet, -250, 1, T0));
@@ -147,7 +147,7 @@ class BalanceServiceTest {
     }
 
     @Test
-    @DisplayName("PLAN §4.5: FROZEN and CLOSED accounts still serve balance reads")
+    @DisplayName("The lifecycle rules: FROZEN and CLOSED accounts still serve balance reads")
     void current_serves_frozen_and_closed_accounts() {
         AccountId frozen = new AccountId(MAIN);
         accounts.seed(Account.open(frozen, "balance-frozen", EUR, AccountType.ASSET, true, T0)
@@ -224,7 +224,7 @@ class BalanceServiceTest {
     }
 
     @Test
-    @DisplayName("PLAN §5 (pinned at M3): the window is (from, to] — from exclusive, to inclusive")
+    @DisplayName("The API contract (pinned at M3): the window is (from, to] — from exclusive, to inclusive")
     void statement_window_is_from_exclusive_to_inclusive() {
         AccountId main = seededAccount(MAIN, AccountType.ASSET);
         AccountId other = seededAccount(OTHER, AccountType.EQUITY);

@@ -3,7 +3,7 @@ package io.github.essandhu.ledger.domain.error;
 import io.github.essandhu.ledger.domain.model.AccountId;
 
 /**
- * I12, posting half of closing: an account may close only at natural balance zero (PLAN §4.5 —
+ * I12, posting half of closing: an account may close only at natural balance zero (the lifecycle rules —
  * closing an account still carrying value would strand it). The rule reads the NATURAL balance,
  * {@code raw × direction}, so a credit-normal account with negative raw is equally unclosable.
  * Evaluated by the close use case while holding the account_balance lock (ADR-0003: lifecycle
@@ -16,7 +16,7 @@ public class AccountBalanceNotZero extends RuntimeException {
     private final long naturalBalance;
 
     public AccountBalanceNotZero(AccountId accountId, long naturalBalance) {
-        super("account %s cannot close carrying natural balance %d (PLAN §4.5: close requires zero)"
+        super("account %s cannot close carrying natural balance %d (close requires zero)"
                 .formatted(accountId.value(), naturalBalance));
         this.accountId = accountId;
         this.naturalBalance = naturalBalance;

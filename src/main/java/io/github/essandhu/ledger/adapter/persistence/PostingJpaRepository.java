@@ -47,7 +47,7 @@ interface PostingJpaRepository extends JpaRepository<PostingJpaEntity, UUID> {
     AsOfAggregateRow sumPostingsAsOf(@Param("accountId") UUID accountId, @Param("at") Instant at);
 
     /**
-     * First statement page (PLAN §5): the {@code (from, to]} window with the bounds optional —
+     * First statement page: the {@code (from, to]} window with the bounds optional —
      * a null bound is widened to ±infinity INSIDE the SQL, because the CAST around the
      * parameter is what lets PostgreSQL type a null bind (Java-side sentinels are not an
      * option: Instant.MIN/MAX lie outside timestamptz's range). ORDER BY + LIMIT ride the
@@ -71,7 +71,7 @@ interface PostingJpaRepository extends JpaRepository<PostingJpaEntity, UUID> {
      * which PostgreSQL evaluates as one index seek on {@code (account_id, posted_at, id)}
      * (and which JPQL cannot express; native SQL is the convention for load-bearing queries
      * anyway). Strictly-greater resume can neither duplicate nor skip: per-account
-     * {@code (posted_at, id)} is a total order that only grows at the top (PLAN §4.6).
+     * {@code (posted_at, id)} is a total order that only grows at the top.
      */
     @Query(value = """
             SELECT id, entry_id, account_id, amount, currency, posted_at

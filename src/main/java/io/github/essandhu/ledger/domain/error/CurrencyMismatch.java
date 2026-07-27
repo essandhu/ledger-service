@@ -5,7 +5,7 @@ import io.github.essandhu.ledger.domain.model.CurrencyCode;
 /**
  * Money never crosses currencies implicitly (ADR-0001). Thrown by {@code Money.plus} when the
  * operands disagree, and by the posting use case when a leg's currency disagrees with its
- * account's (PLAN §4.2: an account holds exactly one currency). Maps to 422: the request is
+ * account's (an account holds exactly one currency). Maps to 422: the request is
  * well-formed, the ledger just refuses the semantics.
  */
 public class CurrencyMismatch extends RuntimeException {

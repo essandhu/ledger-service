@@ -8,7 +8,7 @@ import io.github.essandhu.ledger.domain.model.CurrencyCode;
 /**
  * I1 violated: the draft's legs do not net to exactly zero in every currency. Balance is judged
  * per currency with exact integer equality — one minor unit off is unbalanced, and there is no
- * tolerance band (PLAN §4.2: balancing is literally {@code SUM(amount) = 0} per currency).
+ * tolerance band (balancing is literally {@code SUM(amount) = 0} per currency).
  * Carries the nonzero residuals so the problem response can say precisely which currencies leak
  * how many minor units, instead of a bare "does not balance". Maps to 422.
  */

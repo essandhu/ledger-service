@@ -126,7 +126,7 @@ interface ReconciliationRunJpaRepository extends JpaRepository<ReconciliationRun
             """, nativeQuery = true)
     FindingAggregateRow aggregateFindings(@Param("runId") UUID runId);
 
-    /** Denormalization re-check 1 (PLAN §4.3): postings whose stored currency disagrees with
+    /** Denormalization re-check 1: postings whose stored currency disagrees with
      * their account's. The domain enforces the match at post time; this re-verifies at rest. */
     @Query(value = """
             SELECT COUNT(*)
@@ -136,7 +136,7 @@ interface ReconciliationRunJpaRepository extends JpaRepository<ReconciliationRun
             """, nativeQuery = true)
     long countCurrencyMismatches();
 
-    /** Denormalization re-check 2 (PLAN §4.3): postings whose stored posted_at disagrees with
+    /** Denormalization re-check 2: postings whose stored posted_at disagrees with
      * their entry header's. */
     @Query(value = """
             SELECT COUNT(*)

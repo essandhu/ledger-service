@@ -3,12 +3,12 @@ package io.github.essandhu.ledger.adapter.web;
 import java.net.URI;
 
 /**
- * The machine-readable problem `type` vocabulary (PLAN §5: one stable URI per rejection rule).
+ * The machine-readable problem `type` vocabulary (one stable URI per rejection rule).
  * Absolute on purpose — RFC 9457 resolves relative type references against the request URI,
  * which would give the same problem different identifiers per endpoint. These strings are
  * public API: pinned by tests, never changed once published. Dereferenceable documentation
  * pages arrive with M7; RFC 9457 requires only a stable identifier. Slugs are chosen to align
- * with the M2 {@code ledger.posting.rejected} metric reason tags (PLAN §8) so problems and
+ * with the M2 {@code ledger.posting.rejected} metric reason tags so problems and
  * metrics share one vocabulary.
  */
 public final class ProblemTypes {
@@ -20,8 +20,8 @@ public final class ProblemTypes {
     public static final URI FIELD_NOT_WRITABLE = URI.create(BASE + "field-not-writable");
     public static final URI CONCURRENT_MODIFICATION = URI.create(BASE + "concurrent-modification");
 
-    // M2, the posting rejection vocabulary (PLAN §5): these slugs ARE the reason tags of the
-    // ledger.posting.rejected counter (PLAN §8) — one vocabulary, so a dashboard series and a
+    // M2, the posting rejection vocabulary: these slugs ARE the reason tags of the
+    // ledger.posting.rejected counter — one vocabulary, so a dashboard series and a
     // client's problem document dereference the same name. ACCOUNT_CLOSED above joined the
     // family unchanged: postings to CLOSED accounts reuse the M1 slug, exactly as its javadoc
     // promised. ACCOUNT_BALANCE_NOT_ZERO belongs to the close use case, not the posting ports,
@@ -38,7 +38,7 @@ public final class ProblemTypes {
     public static final URI ACCOUNT_BALANCE_NOT_ZERO = URI.create(BASE + "account-balance-not-zero");
 
     // M4 (ADR-0004): same key, different payload hash — key reuse, a client bug rejected
-    // loudly. Deliberately NOT part of the ledger.posting.rejected reason set: PLAN §8 gives
+    // loudly. Deliberately NOT part of the ledger.posting.rejected reason set: the metrics contract gives
     // conflicts their own counter (ledger.idempotency.conflict), the ACCOUNT_BALANCE_NOT_ZERO
     // exclusion precedent. Missing/malformed Idempotency-Key headers are shape violations —
     // bare 400s, no slug, like every other 400.

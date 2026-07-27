@@ -19,7 +19,7 @@ import io.github.essandhu.ledger.application.port.in.StatementFilter;
 import io.github.essandhu.ledger.application.port.in.StatementSpec;
 import io.github.essandhu.ledger.domain.model.AccountId;
 
-/** The statement surface (PLAN §5, M3). Thin: param ↔ query mapping only. */
+/** The statement surface (M3). Thin: param ↔ query mapping only. */
 @RestController
 @RequestMapping("/api/v1/accounts/{id}/postings")
 class StatementController {

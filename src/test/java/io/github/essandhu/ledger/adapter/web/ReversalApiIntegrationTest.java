@@ -38,11 +38,11 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
  * at most once, and the double-reversal race loses with a 422 — never a 5xx, because the
  * shared account-set lock serializes the check (ADR-0003) and the partial unique index
  * {@code journal_entry_reversed_once} stays a silent backstop. Reversing a REVERSAL is legal
- * by the same model (PLAN §4.1): "reversed" is a derived property, so a reversal of a reversal
+ * by the same model: "reversed" is a derived property, so a reversal of a reversal
  * is simply a fresh entry with a fresh {@code reversal_of} pointer at the reversal — nothing
  * about the original changes. And because a reversal is an ordinary posting, it obeys the
  * status gate: reversing into a FROZEN account fails, the documented operational caveat of
- * PLAN §4.5.
+ * The lifecycle rules.
  */
 @LedgerIntegrationTest
 @DisplayName("I11: reversals — exact negation, at-most-once, races lose loudly")
@@ -242,7 +242,7 @@ class ReversalApiIntegrationTest {
                 body(reverse(subject, originalId, null)), "$.id");
         MvcTestResult second = reverse(subject, firstReversalId, null);
         // The partial unique index constrains each entry to AT MOST ONE reversal; the first
-        // reversal has none yet, so reversing it is an ordinary post (PLAN §4.1's model:
+        // reversal has none yet, so reversing it is an ordinary post (the domain model:
         // "reversed" is derived, nothing on the original — or the reversal — ever mutates).
         assertThat(second).hasStatus(HttpStatus.CREATED);
         String secondReversal = body(second);

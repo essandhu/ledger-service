@@ -19,7 +19,7 @@ import io.github.essandhu.ledger.domain.model.CurrencyCode;
 import io.github.essandhu.ledger.domain.model.Money;
 
 /**
- * The transfer surface (PLAN §5): a command endpoint over the same posting engine. Thin: DTO ↔
+ * The transfer surface: a command endpoint over the same posting engine. Thin: DTO ↔
  * command mapping only. The Location points into /journal-entries — what a transfer CREATES is
  * a journal entry; /transfers itself has no item resource to address. M4: requires
  * {@code Idempotency-Key} (ADR-0004), same shared response mapping as the journal surface.

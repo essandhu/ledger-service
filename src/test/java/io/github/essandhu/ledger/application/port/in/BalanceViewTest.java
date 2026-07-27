@@ -16,7 +16,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Entry guards for the balance reading: postingCount is the statement-walk verifier
- * (PLAN §5), so a figure claiming to aggregate a negative number of postings is nonsense
+ *, so a figure claiming to aggregate a negative number of postings is nonsense
  * the record refuses to carry.
  */
 @DisplayName("BalanceView: constructor guards")

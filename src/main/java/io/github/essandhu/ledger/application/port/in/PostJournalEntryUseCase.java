@@ -6,7 +6,7 @@ import java.util.Objects;
 import io.github.essandhu.ledger.domain.model.EntryDraft;
 
 /**
- * POST /journal-entries (PLAN §5): record an arbitrary balanced 2..n-leg entry. The command
+ * POST /journal-entries: record an arbitrary balanced 2..n-leg entry. The command
  * carries raw legs, not a validated draft — building the {@link EntryDraft} (and with it the
  * I1/I2 verdict) is the use case's first act, so validation order stays pinned in one place
  * and a garbage payload never touches the database (ADR-0003 step 1).

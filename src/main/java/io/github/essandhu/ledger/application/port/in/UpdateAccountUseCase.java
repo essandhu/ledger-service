@@ -8,9 +8,9 @@ import io.github.essandhu.ledger.domain.model.AccountId;
 import io.github.essandhu.ledger.domain.model.AccountStatus;
 
 /**
- * PATCH /accounts/{id} (PLAN §5): rename and/or lifecycle transition as ONE atomic operation.
+ * PATCH /accounts/{id}: rename and/or lifecycle transition as ONE atomic operation.
  *
- * <p>Deviation from the PLAN §3.1 sketch, which listed a {@code ChangeAccountStatusUseCase}:
+ * <p>Deviation from the package layout's sketch, which listed a {@code ChangeAccountStatusUseCase}:
  * PATCH carries name and status together, and the transaction boundary lives in the service —
  * two ports would mean two transactions per request (or an orchestrator the architecture
  * doesn't have). One port per API operation keeps the PATCH atomic; §3.1 was reconciled.

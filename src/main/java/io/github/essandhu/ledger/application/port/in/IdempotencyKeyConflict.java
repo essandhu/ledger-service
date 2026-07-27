@@ -12,7 +12,7 @@ import java.util.Objects;
  * <p>Lives in {@code port.in} beside {@link AccountNotFound}/{@link EntryNotFound}: idempotency
  * is application protocol, not a domain money rule — {@code domain.error} stays the vocabulary
  * of double-entry itself. Deliberately NOT part of the {@code ledger.posting.rejected} reason
- * vocabulary: PLAN §8 gives conflicts their own counter, {@code ledger.idempotency.conflict}
+ * vocabulary: the metrics contract gives conflicts their own counter, {@code ledger.idempotency.conflict}
  * (the {@code account-balance-not-zero} exclusion precedent).
  */
 public class IdempotencyKeyConflict extends RuntimeException {

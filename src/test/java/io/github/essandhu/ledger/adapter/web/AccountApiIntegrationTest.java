@@ -32,9 +32,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 
 /**
- * The account CRUD + lifecycle HTTP surface (PLAN §5) against real PostgreSQL: observable
- * behavior only — status codes, RFC 9457 bodies with pinned type URIs, rows, headers
- * (TEST-STRATEGY §2.1). Shared-context discipline: every row this class creates carries a
+ * The account CRUD + lifecycle HTTP surface against real PostgreSQL: observable
+ * behavior only — status codes, RFC 9457 bodies with pinned type URIs, rows, headers.
+ * Shared-context discipline: every row this class creates carries a
  * unique marker name, and no assertion quantifies over rows it did not create.
  */
 @LedgerIntegrationTest
@@ -356,7 +356,7 @@ class AccountApiIntegrationTest {
             }
 
             // Walk pages of a filtered listing; other tests' rows may interleave — assertions
-            // quantify ONLY over the marked rows (shared-schema discipline, TEST-STRATEGY §2).
+            // quantify ONLY over the marked rows (shared-schema discipline).
             List<String> seenOwn = collectOwnRows("type=EXPENSE&status=ACTIVE", 3, prefix);
             assertThat(seenOwn).as("each own row exactly once, in creation order")
                     .containsExactlyElementsOf(created);

@@ -9,7 +9,7 @@ import io.github.essandhu.ledger.domain.error.InvalidAccountInput;
 import io.github.essandhu.ledger.domain.error.InvalidStatusTransition;
 
 /**
- * A bucket of value in exactly one currency (PLAN §4.1). Immutable: every mutation returns a
+ * A bucket of value in exactly one currency. Immutable: every mutation returns a
  * new instance; a mutation that would change nothing returns {@code this}, so callers can use
  * identity to decide whether anything needs persisting (no phantom writes, no version bumps on
  * declarative no-ops).
@@ -17,7 +17,7 @@ import io.github.essandhu.ledger.domain.error.InvalidStatusTransition;
  * <p>I12, lifecycle half (M1): edge legality is enforced here, and since M2 so is the posting
  * half's status gate ({@link #ensureAcceptsPostings()}). The other close precondition — natural
  * balance must be zero — is {@link CloseBalanceRule}, a separate domain rule the use case
- * evaluates while holding the account_balance lock (PLAN §4.5); this type's signatures did not
+ * evaluates while holding the account_balance lock; this type's signatures did not
  * change for it, exactly as the M1 forward-contract promised.
  *
  * <p>Optimistic-lock bookkeeping (the {@code version} column) is deliberately absent: it is
@@ -43,7 +43,7 @@ public record Account(
         Objects.requireNonNull(updatedAt, "updatedAt");
     }
 
-    /** Opens a new ACTIVE account; {@code now} comes from the injected Clock (TEST-STRATEGY §1). */
+    /** Opens a new ACTIVE account; {@code now} comes from the injected Clock. */
     public static Account open(AccountId id, String name, CurrencyCode currency, AccountType type,
             boolean allowNegative, Instant now) {
         return new Account(id, name, currency, type, AccountStatus.ACTIVE, allowNegative, now, now);
@@ -82,9 +82,9 @@ public record Account(
     }
 
     /**
-     * I12, posting half (M2): only ACTIVE accounts accept postings (PLAN §4.5). FROZEN rejects
+     * I12, posting half (M2): only ACTIVE accounts accept postings. FROZEN rejects
      * them in both directions but reversibly ({@link AccountFrozen}); CLOSED rejects them
-     * terminally ({@link AccountClosed}) — PLAN §5 files both under the same 422 family as the
+     * terminally ({@link AccountClosed}) — the API contract files both under the same 422 family as the
      * M1 metadata rejections. The posting use case calls this AFTER taking the account_balance
      * lock, on a fresh post-lock read (ADR-0003: the only status read, so there is no
      * stale-status window for a concurrent freeze or close to slip through).

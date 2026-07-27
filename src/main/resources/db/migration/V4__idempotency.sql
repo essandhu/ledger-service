@@ -1,4 +1,4 @@
--- I8/I9 (M4): the idempotency bookkeeping table (PLAN §4.3, ADR-0004). One row per SUCCESSFUL
+-- I8/I9 (M4): the idempotency bookkeeping table (ADR-0004). One row per SUCCESSFUL
 -- keyed write, inserted in the SAME transaction as the journal entry it records — so there is
 -- no crash window in which the effect exists without its record or vice versa (ADR-0004
 -- §Decision, reason 1). Rejected postings write nothing here (only successful outcomes are
@@ -42,9 +42,9 @@ CREATE TABLE idempotency_record (
     -- The entry this key produced: the permanent audit answer to "which request created this".
     entry_id        uuid        NOT NULL REFERENCES journal_entry (id),
     -- The original response, for replays. Status is audit data (replays always answer 200 per
-    -- PLAN §5); the body is returned VERBATIM. Deliberate deviation from the PLAN §4.3 sketch's
-    -- jsonb, recorded at M4: jsonb re-serialization normalizes key order and whitespace, which
-    -- would break the byte-identical replay the ADR promises — text preserves the exact bytes,
+    -- the API contract); the body is returned VERBATIM. Deliberate deviation from the schema
+    -- sketch's jsonb, recorded at M4: jsonb re-serialization normalizes key order and whitespace,
+    -- which would break the byte-identical replay the ADR promises — text preserves the exact bytes,
     -- and the IS JSON OBJECT CHECK keeps validity enforcement (every stored body is an
     -- EntryResponse document — an OBJECT, so the check mirrors the writer exactly, the V2
     -- rule: a row a DBA sneaks in can never be one the replay path would serve as garbage).
@@ -67,7 +67,7 @@ CREATE TABLE idempotency_record (
     CONSTRAINT idempotency_record_pkey PRIMARY KEY (created_by, idem_key)
 );
 
--- The purge scan path (PLAN §4.3): DELETE ... WHERE expires_at < now(), batched by ctid.
+-- The purge scan path: DELETE... WHERE expires_at < now, batched by ctid.
 CREATE INDEX idempotency_record_expiry ON idempotency_record (expires_at);
 
 -- SELECT: replay/conflict lookups. INSERT: the same-transaction record write. DELETE: the

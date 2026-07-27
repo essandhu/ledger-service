@@ -10,13 +10,13 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.jwt.Jwt;
 
 /**
- * Keycloak realm roles ({@code realm_access.roles}, PLAN §7) → Spring authorities. Only
+ * Keycloak realm roles ({@code realm_access.roles}) → Spring authorities. Only
  * {@code LEDGER_*} roles are mapped ({@code ROLE_}-prefixed for {@code hasRole}); Keycloak's
  * built-ins (offline_access, uma_authorization, ...) and malformed claim shapes yield nothing —
  * an authenticated, role-less principal, which the I13 matrix pins to 403.
  *
  * <p>Public deliberately: the integration matrix routes its minted JWTs through this exact
- * class, so the claim mapping is on the tested path (TEST-STRATEGY §2 triangulation — unit
+ * class, so the claim mapping is on the tested path (the test-type rules triangulation — unit
  * test for the mapping, matrix for access decisions, CI smoke for the real issuer).
  */
 public class LedgerRealmRoleConverter implements Converter<Jwt, Collection<GrantedAuthority>> {

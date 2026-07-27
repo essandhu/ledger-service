@@ -10,10 +10,10 @@ import io.github.essandhu.ledger.domain.model.CurrencyCode;
 
 /**
  * Result of {@link GetBalanceQuery}: one account's balance in both pinned readings — raw (the
- * signed Σ of postings, debit-positive) and natural (raw × direction, PLAN §4.2: the figure
+ * signed Σ of postings, debit-positive) and natural (raw × direction, the sign convention: the figure
  * "shown to clients"). {@code postingCount} is the number of postings the figure aggregates,
  * exposed so a client can verify a full statement walk against the balance it reconciles to
- * (PLAN §5, pinned at M3). {@code asOf} present ⇔ the figure was derived from postings at that
+ * (pinned at M3). {@code asOf} present ⇔ the figure was derived from postings at that
  * instant (ADR-0002); empty ⇔ the live snapshot.
  */
 public record BalanceView(

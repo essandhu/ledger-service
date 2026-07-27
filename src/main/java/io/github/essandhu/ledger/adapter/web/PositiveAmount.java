@@ -12,7 +12,7 @@ import jakarta.validation.Payload;
 /**
  * {@code @Positive} for a {@link MoneyDto}-typed field — bean validation's numeric constraints
  * cannot reach inside a nested record, so this delegating constraint exists (the
- * {@link ValidCurrency} pattern). PLAN §5 pins the transfer's sign semantics: source = debit =
+ * {@link ValidCurrency} pattern). The API contract pins the transfer's sign semantics: source = debit =
  * {@code +amount}, target = credit = {@code −amount} — a zero or negative amount would merely
  * swap the roles, so the DTO refuses to let clients express that confusion (400: shape, not
  * business state; the domain's zero-leg rule I2 still backstops zero for non-HTTP callers).

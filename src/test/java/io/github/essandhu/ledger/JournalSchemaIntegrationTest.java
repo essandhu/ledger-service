@@ -311,7 +311,7 @@ class JournalSchemaIntegrationTest {
         return granted;
     }
 
-    /** Marker-named fixture value (shared-schema discipline, TEST-STRATEGY §2). */
+    /** Marker-named fixture value (shared-schema discipline). */
     private static String marker(String label) {
         return "journal-schema-probe-" + label + "-" + UUID.randomUUID();
     }

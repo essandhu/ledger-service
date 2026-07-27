@@ -6,7 +6,7 @@ import java.util.Objects;
 import io.github.essandhu.ledger.domain.model.EntryId;
 
 /**
- * One successful keyed write (ADR-0004, PLAN §4.3): the (principal, key) scope, the SHA-256 of
+ * One successful keyed write (ADR-0004): the (principal, key) scope, the SHA-256 of
  * the canonical command it recorded, the entry it produced, and the original response for
  * byte-identical replays. Written exactly once, in the same transaction as the entry; only
  * successful outcomes are recorded (a rejected posting writes nothing, so its retry

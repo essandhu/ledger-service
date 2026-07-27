@@ -7,7 +7,7 @@ import jakarta.validation.constraints.Size;
 import io.github.essandhu.ledger.domain.model.AccountType;
 
 /**
- * POST /accounts body (PLAN §5: name, currency, type, allowNegative). {@code status} is
+ * POST /accounts body (name, currency, type, allowNegative). {@code status} is
  * declared only to be rejected loudly ({@link FieldNotWritable}) — new accounts are always
  * ACTIVE, and a client asking otherwise must not be silently ignored. Declared as String so
  * ANY status value (even garbage) gets the 422, not an enum-parse 400.

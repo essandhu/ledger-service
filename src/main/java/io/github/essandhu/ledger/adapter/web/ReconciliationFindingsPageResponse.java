@@ -4,7 +4,7 @@ import java.util.List;
 
 import io.github.essandhu.ledger.application.port.in.ReconciliationFindingsPage;
 
-/** Offset-pagination envelope for GET /reconciliation-runs/{id}/findings (PLAN §5, M6). */
+/** Offset-pagination envelope for GET /reconciliation-runs/{id}/findings (M6). */
 record ReconciliationFindingsPageResponse(
         List<ReconciliationFindingResponse> content, int page, int size, long totalElements) {
 

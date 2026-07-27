@@ -17,7 +17,7 @@ import io.github.essandhu.ledger.domain.model.Account;
 import io.github.essandhu.ledger.domain.model.AccountId;
 
 /**
- * Hand-written fake (TEST-STRATEGY §2.1: fakes over mock-framework stubs, so the port contract
+ * Hand-written fake (fakes over mock-framework stubs, so the port contract
  * is enforced, not just echoed): a real in-memory implementation with the same observable
  * semantics as the JPA adapter — including id-ordered listing and failure on updating a missing
  * row. Counts writes so no-op detection is assertable.

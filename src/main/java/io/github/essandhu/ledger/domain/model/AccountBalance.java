@@ -4,7 +4,7 @@ import java.time.Instant;
 import java.util.Objects;
 
 /**
- * The per-account balance snapshot as a domain value (PLAN §4.1, ADR-0002): the raw signed sum
+ * The per-account balance snapshot as a domain value (ADR-0002): the raw signed sum
  * of the account's posting amounts in minor units, debit-positive, plus the posting-count
  * watermark reconciliation compares against {@code COUNT(*)} (I15, I4). Raw MAY be negative —
  * on allow-negative accounts, and on any credit-normal account in ordinary credit: the
@@ -33,9 +33,9 @@ public record AccountBalance(
     }
 
     /**
-     * The balance a bookkeeper expects: {@code raw × direction(type)} (PLAN §4.2) — what
+     * The balance a bookkeeper expects: {@code raw × direction(type)} — what
      * clients see, what the overdraft check floors at zero (I6), and what must be zero to
-     * close (PLAN §4.5). Checked ({@code Math.multiplyExact}): direction is ±1, so the product
+     * close. Checked ({@code Math.multiplyExact}): direction is ±1, so the product
      * is exact for every representable balance bar the two's-complement edge — raw
      * {@code Long.MIN_VALUE} on a credit-normal account has no 64-bit natural (the same lone
      * edge {@code negateExact} refuses in reversal arithmetic), and a plain {@code *} would

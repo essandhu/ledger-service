@@ -42,7 +42,7 @@ import io.github.essandhu.ledger.support.property.Property;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * I10, end to end (TEST-STRATEGY §3): for generated entry sequences posted through the REAL
+ * I10, end to end: for generated entry sequences posted through the REAL
  * stack, {@code asOf(t2) − asOf(t1) = Σ postings in (t1, t2]} per account, {@code asOf(now)}
  * equals the current snapshot (this suite is single-writer, i.e. quiesced), and the keyset
  * statement walk at a random page size visits exactly the account's postings, in order,

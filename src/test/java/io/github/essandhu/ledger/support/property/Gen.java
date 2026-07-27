@@ -17,7 +17,7 @@ import java.util.function.Function;
  * successor appears, {@code Gen<T>} maps mechanically onto {@code Arbitrary<T>} (ADR-0005's
  * superseding-ADR clause).
  *
- * <p><b>Determinism contract</b> (TEST-STRATEGY §1: "a failure message that cannot be reproduced
+ * <p><b>Determinism contract</b> ("a failure message that cannot be reproduced
  * is treated as a test defect"): a generator must be a pure function of the
  * {@link SplittableRandom} handed to it — no mutable state, no ambient entropy, no ambient time.
  * {@link Property#check} derives one {@code SplittableRandom} per iteration from a root seed via

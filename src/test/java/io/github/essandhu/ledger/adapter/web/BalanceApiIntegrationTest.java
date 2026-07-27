@@ -25,13 +25,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 
 /**
- * The balance HTTP surface (PLAN §5, M3) against real PostgreSQL: the O(1) snapshot read, the
+ * The balance HTTP surface (M3) against real PostgreSQL: the O(1) snapshot read, the
  * postings-derived as-of read, and the pinned response contract — natural balance leads, raw
  * rides along, {@code asOf} present exactly on derived figures (absent, never null, on live
  * ones). Shared-context discipline as everywhere: marker names, per-scenario subjects, no
  * assertion over rows this test did not create.
  *
- * <p>{@code ?at=} note: Z-form instants are the wire contract (PLAN §5, pinned at M3). Offset
+ * <p>{@code ?at=} note: Z-form instants are the wire contract (pinned at M3). Offset
  * forms are deliberately uncontracted — a raw '+' is servlet-decoded to a space on a real
  * container while MockMvc encodes differently, so neither acceptance nor rejection can be
  * proven here, and what cannot be proven is not promised.
@@ -139,7 +139,7 @@ class BalanceApiIntegrationTest {
         }
 
         @Test
-        @DisplayName("PLAN §4.2: a credited LIABILITY account shows natural +N over raw −N")
+        @DisplayName("The sign convention: a credited LIABILITY account shows natural +N over raw −N")
         void natural_balance_flips_the_raw_sign_for_credit_normal_accounts() {
             String cash = createAccount(marker("balance-src"), "ASSET", true);
             String wallet = createAccount(marker("balance-wallet"), "LIABILITY", false);
@@ -152,7 +152,7 @@ class BalanceApiIntegrationTest {
         }
 
         @Test
-        @DisplayName("PLAN §4.5: FROZEN accounts still serve balance reads")
+        @DisplayName("The lifecycle rules: FROZEN accounts still serve balance reads")
         void frozen_accounts_still_serve_reads() {
             String cash = createAccount(marker("balance-frozen"), "ASSET", true);
             String equity = createAccount(marker("balance-frozen-eq"), "EQUITY", true);

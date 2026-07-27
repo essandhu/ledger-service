@@ -25,7 +25,7 @@ import io.github.essandhu.ledger.domain.error.ZeroAmountPosting;
 import io.github.essandhu.ledger.domain.model.EntryType;
 
 /**
- * Micrometer decorator over the three money-moving ports (PLAN §8). It lives HERE, in config,
+ * Micrometer decorator over the three money-moving ports. It lives HERE, in config,
  * and not in the application layer: the ArchUnit rule
  * {@code application_is_spring_free_except_transactions} deliberately carries no micrometer
  * allowance, and widening it for metrics would trade the framework-free core away for a
@@ -35,7 +35,7 @@ import io.github.essandhu.ledger.domain.model.EntryType;
  * commit included. The third posting metric, {@code ledger.posting.lock.wait}, lives in the
  * persistence adapter around the FOR UPDATE query itself, where the waiting happens.
  *
- * <p>Vocabulary discipline (PLAN §8, pinned by the ProblemTypes javadoc): the {@code reason}
+ * <p>Vocabulary discipline (pinned by the ProblemTypes javadoc): the {@code reason}
  * tag on {@code ledger.posting.rejected} IS the problem-type slug — one vocabulary for
  * problems and metrics, so a dashboard and a client error dereference the same names. Only the
  * mapped domain rejections count as {@code outcome=rejected}; anything else — the 404 of a
@@ -44,7 +44,7 @@ import io.github.essandhu.ledger.domain.model.EntryType;
  * {@code account-balance-not-zero} is absent by design: it belongs to the close use case,
  * which these ports do not carry.
  *
- * <p>M4, the idempotency pair (PLAN §8): replays bump {@code ledger.idempotency.replayed} and
+ * <p>M4, the idempotency pair: replays bump {@code ledger.idempotency.replayed} and
  * conflicts {@code ledger.idempotency.conflict} — each with its timer sample DISCARDED, the
  * same discipline as the unmapped exceptions: nothing was posted, so neither belongs in the
  * posting duration series, and {@code idempotency-key-conflict} deliberately stays out of the
@@ -60,7 +60,7 @@ final class MeteredPostingUseCases
     private static final String CONFLICT = "ledger.idempotency.conflict";
 
     /**
-     * Domain rejection type → problem slug (PLAN §5). Exact classes — no hierarchies exist.
+     * Domain rejection type → problem slug. Exact classes — no hierarchies exist.
      * Package-private, not private, so the vocabulary proof (MeteredPostingUseCasesTest) can
      * assert these hand-written strings 1:1 against the ProblemTypes posting family — the
      * one-vocabulary contract both javadocs promise.
@@ -109,7 +109,7 @@ final class MeteredPostingUseCases
                         "entry_type", entryType.name(), "outcome", "posted"));
                 case PostingOutcome.Replayed replayed ->
                         // Nothing was posted — the duration series stays a posting series;
-                        // the dedicated counter accounts for the replay (PLAN §8).
+                        // the dedicated counter accounts for the replay.
                         registry.counter(REPLAYED).increment();
             }
             return outcome;

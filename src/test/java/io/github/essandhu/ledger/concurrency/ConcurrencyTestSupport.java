@@ -30,7 +30,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 
 /**
- * Shared machinery of the M5 stress suites (TEST-STRATEGY §4): every workload drives the REAL
+ * Shared machinery of the M5 stress suites: every workload drives the REAL
  * HTTP surface — MockMvc requests through the full filter chain, each worker thread carrying
  * its own per-request JWT (the {@code jwt()} post-processor is request-scoped, so nothing
  * thread-local leaks between workers), so the proofs cover exactly the stack a production
@@ -38,7 +38,7 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
  * port-level tests would bypass). Assertions read the DATABASE through the app pool — success
  * is never inferred from client-side bookkeeping alone (the §4 honesty rule) — and every row
  * this class creates carries per-test random ids/subjects (additive-safe shared-schema
- * discipline, TEST-STRATEGY §2).
+ * discipline).
  *
  * <p>Worker-count guidance baked into the defaults: Hikari's pool is the Boot default of 10
  * connections and a posting holds its connection while waiting on row locks (ADR-0003's
@@ -219,7 +219,7 @@ abstract class ConcurrencyTestSupport {
         return amounts;
     }
 
-    /** Sample count of the PLAN §8 lock-wait timer — shared registry, so callers assert
+    /** Sample count of the metrics contract's lock-wait timer — shared registry, so callers assert
      * monotone growth (>=), never absolute values (additive-safe metric discipline). */
     long lockWaitCount() {
         Timer timer = meterRegistry.find("ledger.posting.lock.wait").timer();

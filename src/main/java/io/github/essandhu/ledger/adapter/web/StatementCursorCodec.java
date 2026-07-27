@@ -12,7 +12,7 @@ import io.github.essandhu.ledger.domain.model.AccountId;
 import io.github.essandhu.ledger.domain.model.PostingId;
 
 /**
- * The opaque statement cursor (PLAN §5, pinned at M3): base64url, no padding, over
+ * The opaque statement cursor (pinned at M3): base64url, no padding, over
  * {@code "accountId/postedAt/postingId"}. The token embeds the ACCOUNT it was issued for, and
  * {@link #decode} rejects it against any other account — a pasted foreign cursor would
  * otherwise produce a well-formed but silently truncated statement, exactly the

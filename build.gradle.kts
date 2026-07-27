@@ -64,7 +64,7 @@ dependencies {
 
 tasks.test {
     useJUnitPlatform {
-        // M5 (TEST-STRATEGY §2): the concurrency suite is the first slow suite to need
+        // M5: the concurrency suite is the first slow suite to need
         // isolation, so it leaves the default lane for its own tag-filtered task below.
         excludeTags("concurrency")
     }
@@ -75,7 +75,7 @@ tasks.test {
     // Declared as a task output so build-cache hits restore it — otherwise a FROM-CACHE test
     // task on an unchanged-input CI run would upload nothing and fail the openapi artifact step.
     outputs.file(layout.buildDirectory.file("openapi/openapi.json"))
-    // Property-harness replay contract (ADR-0005, TEST-STRATEGY §2.2): `Property` reads these at
+    // Property-harness replay contract (ADR-0005): `Property` reads these at
     // check time inside the forked test JVM, so the CLI promises `-Dledger.property.seed=<long>`
     // (replay a falsified run) and `-Dledger.property.iterations=<n>` (raise the budget) only work
     // if Gradle forwards them. Forwarded only when set, so the task's inputs — and its cacheability —
@@ -86,7 +86,7 @@ tasks.test {
     finalizedBy(tasks.jacocoTestReport)
 }
 
-// M5 (TEST-STRATEGY §2, §4): the parallel-writer proof lane — I6 racy, I7, I8 racy, I17 —
+// M5: the parallel-writer proof lane — I6 racy, I7, I8 racy, I17 —
 // tag-filtered out of `test` so the fast deterministic lane stays fast, wired into `check` so
 // a plain `./gradlew build` still proves every invariant (per-milestone definition of done).
 // CI runs it as its own required job in parallel with the default lane (`build -x concurrencyTest`).
@@ -98,8 +98,8 @@ val concurrencyTest by tasks.registering(Test::class) {
     }
     testClassesDirs = sourceSets.test.get().output.classesDirs
     classpath = sourceSets.test.get().runtimeClasspath
-    // Sizing knobs (TEST-STRATEGY §4: "thread count and iteration count are properties so a
-    // nightly run can crank them") — forwarded into the forked JVM exactly like the property
+    // Sizing knobs — thread count and iteration count are properties so a nightly run can crank
+    // them — forwarded into the forked JVM exactly like the property
     // harness's seed/iterations knobs on `test`, and only when set. The property knobs are
     // forwarded too: the suite may seed randomized workloads.
     listOf("ledger.concurrency.threads", "ledger.concurrency.iterations",
@@ -175,7 +175,7 @@ tasks.check {
 }
 
 pitest {
-    // TEST-STRATEGY §5 (M7): mutation testing is a NON-GATING report — no mutationThreshold,
+    // The milestone gates (M7): mutation testing is a NON-GATING report — no mutationThreshold,
     // deliberately NOT wired into `check`; run it with `./gradlew pitest` (report lands in
     // build/reports/pitest). The Platform-6 classpath workaround lives in the `pitest`
     // dependency configuration above; the known upstream failure mode is a SILENT green run

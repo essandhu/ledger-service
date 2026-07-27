@@ -21,7 +21,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * I12 (lifecycle half, M1): {@code ACTIVE ⇄ FROZEN}, {@code ACTIVE|FROZEN → CLOSED}, CLOSED
- * terminal (PLAN §4.5). Same-state transitions are deliberate no-ops (declarative PATCH — the
+ * terminal. Same-state transitions are deliberate no-ops (declarative PATCH — the
  * account-management API carries no Idempotency-Key, so natural idempotence is its only retry
  * story). The posting half of I12 (M2) is proven here at the unit level too: posting acceptance
  * by status ({@code ensureAcceptsPostings}) and the zero-balance close precondition
@@ -192,7 +192,7 @@ class AccountTest {
     }
 
     @Nested
-    @DisplayName("direction (PLAN §4.2): the debit/credit sign of each account type")
+    @DisplayName("direction: the debit/credit sign of each account type")
     class Direction {
 
         @ParameterizedTest
@@ -229,7 +229,7 @@ class AccountTest {
         }
 
         @Test
-        @DisplayName("CLOSED rejects postings — the same 422 family as metadata edits (PLAN §5)")
+        @DisplayName("CLOSED rejects postings — the same 422 family as metadata edits")
         void closed_rejects_postings() {
             Account account = closed();
             assertThatThrownBy(account::ensureAcceptsPostings)

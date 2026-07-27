@@ -16,7 +16,7 @@ import io.github.essandhu.ledger.domain.error.ZeroAmountPosting;
  * IS validation — an EntryDraft that exists satisfies I1 and I2, with no I/O and no account
  * resolution: at least two legs, every leg nonzero, and every currency netting to exactly zero.
  * Multi-currency drafts are legal precisely because balance is judged per currency, never
- * across — no exchange rates anywhere (PLAN §1, §4.2).
+ * across — no exchange rates anywhere.
  *
  * <p>Validation ORDER is contract, not accident: nulls → leg count ({@link TooFewPostings}) →
  * per-leg nonzero ({@link ZeroAmountPosting}) → description well-formedness
@@ -84,8 +84,8 @@ public record EntryDraft(String description, List<Leg> legs) {
     }
 
     /**
-     * One signed movement of the draft: an account plus a debit-positive amount in minor units
-     * (PLAN §4.2). The account is an unresolved id on purpose — draft validation is pure and
+     * One signed movement of the draft: an account plus a debit-positive amount in minor units.
+     * The account is an unresolved id on purpose — draft validation is pure and
      * needs no repository; whether the account exists, is ACTIVE, and matches the currency is
      * decided later, under the lock.
      */

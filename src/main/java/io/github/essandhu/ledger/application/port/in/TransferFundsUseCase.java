@@ -6,9 +6,9 @@ import io.github.essandhu.ledger.domain.model.AccountId;
 import io.github.essandhu.ledger.domain.model.Money;
 
 /**
- * POST /transfers (PLAN §5): the two-leg convenience over the same posting engine. Sign
- * semantics are PLAN §5, literally: the SOURCE leg is the DEBIT, {@code +amount}; the TARGET
- * leg is the CREDIT, {@code −amount} — the debit-positive convention of PLAN §4.2 applied to
+ * POST /transfers: the two-leg convenience over the same posting engine. Sign
+ * semantics are the API contract, literally: the SOURCE leg is the DEBIT, {@code +amount}; the TARGET
+ * leg is the CREDIT, {@code −amount} — the debit-positive convention of the sign convention applied to
  * a single {@link Money}, so the pair is balanced by construction and same-currency by
  * construction. Whether that currency matches each account's, and every other
  * account-dependent rule, is decided like any entry: under the balance lock (ADR-0003).

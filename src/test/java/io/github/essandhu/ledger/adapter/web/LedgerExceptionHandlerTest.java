@@ -104,8 +104,8 @@ class LedgerExceptionHandlerTest {
         assertThat(problem.getType()).hasToString(PROBLEMS + "concurrent-modification");
     }
 
-    // ── M2 posting mappings (PLAN §5) ──────────────────────────────────────────────────────
-    // The slugs below double as the ledger.posting.rejected reason vocabulary (PLAN §8), so
+    // ── M2 posting mappings ──────────────────────────────────────────────────────
+    // The slugs below double as the ledger.posting.rejected reason vocabulary, so
     // each pin here also pins a metric tag.
 
     @Test

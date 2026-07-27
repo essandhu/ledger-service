@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# End-to-end demo from a clean clone (PLAN §9, M7): boots the compose stack and walks every
+# End-to-end demo from a clean clone (M7): boots the compose stack and walks every
 # guarantee the README advertises — real Keycloak tokens, the role matrix, double-entry
 # postings with their rejection vocabulary, DB-enforced immutability, balances/statements,
 # idempotent replay, reversals, and the reconciliation story (drift induced out-of-band,

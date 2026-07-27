@@ -5,7 +5,7 @@ import java.util.Objects;
 import io.github.essandhu.ledger.domain.error.AccountBalanceNotZero;
 
 /**
- * I12, posting half of closing (PLAN §4.5): an account may close only at natural balance zero.
+ * I12, posting half of closing: an account may close only at natural balance zero.
  * A separate rule type rather than a new {@code Account} method — deliberately honoring the M1
  * forward-contract that {@code Account}'s signatures do not change for this rule, and
  * structurally necessary anyway: the rule reads the balance snapshot, which the account value
@@ -24,7 +24,7 @@ public final class CloseBalanceRule {
     }
 
     /**
-     * @throws AccountBalanceNotZero when the natural balance is nonzero (422, PLAN §5)
+     * @throws AccountBalanceNotZero when the natural balance is nonzero (422)
      * @throws ArithmeticException when the natural balance itself has no 64-bit representation
      *         (raw {@code Long.MIN_VALUE} on a credit-normal account — propagated raw from
      *         {@link AccountBalance#natural}; the close use case translates it into the 422

@@ -80,7 +80,7 @@ class UseCaseConfig {
 
     /**
      * The three money-moving ports resolve to the metered decorator ({@code @Primary}), so
-     * every caller gets PLAN §8's posting metrics for free; PostingService itself stays the
+     * every caller gets the metrics contract's posting metrics for free; PostingService itself stays the
      * only GetJournalEntryQuery. Security and transactions live on the delegate's methods —
      * the decorator times from outside both, measuring what the caller experiences.
      */

@@ -47,5 +47,5 @@ BEGIN
 END
 $$;
 
--- No extensions required in v1: identifiers are UUIDv7 generated application-side (PLAN §4.3),
+-- No extensions required in v1: identifiers are UUIDv7 generated application-side,
 -- so no pgcrypto/uuid-ossp. This migration is the designated home if that ever changes.

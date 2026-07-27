@@ -19,7 +19,7 @@ import io.github.essandhu.ledger.domain.model.JournalEntry;
 import io.github.essandhu.ledger.domain.model.Posting;
 
 /**
- * Hand-written fake (TEST-STRATEGY §2.1: fakes over mock-framework stubs, so the port contract
+ * Hand-written fake (fakes over mock-framework stubs, so the port contract
  * is enforced, not just echoed): a real in-memory journal with the same observable semantics as
  * the JPA adapter — insert-only (I3 has no update path to fake), duplicate-id failure, and
  * reversal existence derived by scanning for a REVERSAL pointing at the original, exactly as
@@ -31,7 +31,7 @@ import io.github.essandhu.ledger.domain.model.Posting;
  */
 public final class FakeJournalRepository implements JournalRepository {
 
-    /** The statement keyset (PLAN §5): posted_at, then id in database order — the id
+    /** The statement keyset: posted_at, then id in database order — the id
      * tiebreak is THE shared bytewise definition, not a local re-derivation. */
     private static final Comparator<Posting> STATEMENT_ORDER = Comparator
             .comparing(Posting::postedAt)

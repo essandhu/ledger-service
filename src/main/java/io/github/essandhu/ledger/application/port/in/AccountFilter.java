@@ -6,7 +6,7 @@ import java.util.Optional;
 import io.github.essandhu.ledger.domain.model.AccountStatus;
 import io.github.essandhu.ledger.domain.model.AccountType;
 
-/** Listing filter (PLAN §5): both dimensions optional, combined with AND. */
+/** Listing filter: both dimensions optional, combined with AND. */
 public record AccountFilter(Optional<AccountType> type, Optional<AccountStatus> status) {
 
     public AccountFilter {

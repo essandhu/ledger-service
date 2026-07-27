@@ -1,7 +1,7 @@
 package io.github.essandhu.ledger.domain.error;
 
 /**
- * I2 violated: double-entry has two sides, so an entry needs at least two postings (PLAN §4.1:
+ * I2 violated: double-entry has two sides, so an entry needs at least two postings (the domain model:
  * a header plus 2..n legs) — a single leg would create or destroy value, zero legs would record
  * nothing. Rejected at draft construction, before any I/O. Maps to 422: the payload is
  * well-formed JSON, the ledger refuses the semantics. There is no schema mirror — a header-only

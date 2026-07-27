@@ -8,7 +8,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import io.github.essandhu.ledger.application.port.out.ReconciliationRun;
 
 /**
- * One reconciliation run on the wire (PLAN §5, M6). {@code finishedAt} and the result counts
+ * One reconciliation run on the wire (M6). {@code finishedAt} and the result counts
  * are absent — never null — until the run has them (the BalanceResponse asOf posture): a
  * RUNNING row observed mid-sweep and a FAILED row simply have less to say.
  */

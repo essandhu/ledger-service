@@ -4,7 +4,7 @@ import java.util.Objects;
 import java.util.Optional;
 
 /**
- * Page size and resume position for the keyset statement walk (PLAN §5). The web layer
+ * Page size and resume position for the keyset statement walk. The web layer
  * validates request params first (400); these guards are the port's own contract for non-HTTP
  * callers — the same dual-validation stance as {@link PageSpec}, which stays the offset-paging
  * spec for account listings while statements page by keyset.

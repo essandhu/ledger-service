@@ -60,7 +60,7 @@ class EntryDraftTest {
         @Test
         @DisplayName("accepts a multi-currency draft when EACH currency nets to zero")
         void accepts_multi_currency_draft_balanced_per_currency() {
-            // PLAN §1: multi-currency entries are legal without any notion of an exchange
+            // The v1 scope: multi-currency entries are legal without any notion of an exchange
             // rate precisely because balance is judged per currency, never across.
             assertThatCode(() -> new EntryDraft(null, List.of(
                     leg(CASH, 500, EUR), leg(REVENUE, -500, EUR),

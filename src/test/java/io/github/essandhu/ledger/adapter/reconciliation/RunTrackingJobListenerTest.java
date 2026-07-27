@@ -29,7 +29,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * The listener's outcome mapping (PLAN §8): completed runs close with a verdict, count under
+ * The listener's outcome mapping: completed runs close with a verdict, count under
  * their outcome tag, record a duration sample, and overwrite the gauges; FAILED runs stamp the
  * run row, count as {@code failed}, DISCARD the duration sample, and leave the gauges at the
  * last completed run's values.

@@ -11,7 +11,7 @@ import java.util.function.Consumer;
  * The property runner of the in-repo harness (ADR-0005; see {@link Gen} for why the harness is
  * owned code rather than jqwik). {@link #check} runs an invariant over {@link #DEFAULT_ITERATIONS}
  * generated values and reports the first violation with everything needed to reproduce it —
- * because TEST-STRATEGY §1 treats an unreproducible failure message as a test defect in its own
+ * because the test ground rules treat an unreproducible failure message as a test defect in its own
  * right.
  *
  * <p><b>Seed discipline.</b> Each run has one root seed: taken from
@@ -24,7 +24,7 @@ import java.util.function.Consumer;
  * the loop is honest.
  *
  * <p><b>Iterations.</b> {@code -Dledger.property.iterations} raises (or lowers) the count — CI
- * can crank it without a code change (TEST-STRATEGY §2.2). Malformed values fail loudly rather
+ * can crank it without a code change. Malformed values fail loudly rather
  * than being silently ignored: a replay that quietly does not replay is the worst outcome.
  *
  * <p><b>Shrinking, deliberately basic</b> (ADR-0005): numbers step toward zero, lists toward
@@ -204,7 +204,7 @@ public final class Property {
             return Long.parseLong(raw.trim());
         } catch (NumberFormatException notALong) {
             // Loud, not lenient: a typo'd seed silently ignored would "replay" a fresh random
-            // run — the exact unreproducibility TEST-STRATEGY §1 calls a test defect.
+            // run — the exact unreproducibility the test ground rules call a test defect.
             throw new IllegalArgumentException(
                     "-D" + SEED_PROPERTY + " must be a long, got: " + raw, notALong);
         }

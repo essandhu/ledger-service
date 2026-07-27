@@ -26,12 +26,12 @@ import io.github.essandhu.ledger.domain.model.AccountId;
 import io.github.essandhu.ledger.domain.model.Posting;
 
 /**
- * Balance and statement queries (PLAN §5, M3) — the read-only complement of the posting
+ * Balance and statement queries (M3) — the read-only complement of the posting
  * engine, implementing ADR-0002's split literally: current = the snapshot row, read
  * lock-free; as-of = derived from postings, never the snapshot. Registered by config wiring,
  * not component scanning; declarative {@code @Transactional} and {@code @PreAuthorize}
- * (LEDGER_READ on every method, PLAN §5) are its only Spring surface (I14). Reads serve
- * FROZEN and CLOSED accounts alike — lifecycle gates postings, not queries (PLAN §4.5).
+ * (LEDGER_READ on every method) are its only Spring surface (I14). Reads serve
+ * FROZEN and CLOSED accounts alike — lifecycle gates postings, not queries.
  */
 public class BalanceService implements GetBalanceQuery, GetStatementQuery {
 

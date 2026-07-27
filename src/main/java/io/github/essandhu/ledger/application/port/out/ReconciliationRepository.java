@@ -53,7 +53,7 @@ public interface ReconciliationRepository {
     void insertFindings(List<ReconciliationFinding> findings);
 
     /** {@code COUNT(*)} and {@code Σ|delta|} over one run's findings — the drift figures the
-     * finish update and the PLAN §8 gauges report, aggregated where the rows live. */
+     * finish update and the metrics contract's gauges report, aggregated where the rows live. */
     FindingAggregate aggregateFindings(UUID runId);
 
     record FindingAggregate(long driftCount, long absoluteDrift) {
@@ -68,7 +68,7 @@ public interface ReconciliationRepository {
     /**
      * The run-level integrity re-checks, each a single global statement: postings whose
      * denormalized {@code currency} disagrees with their account's, postings whose
-     * denormalized {@code posted_at} disagrees with their entry's (PLAN §4.3), and currencies
+     * denormalized {@code posted_at} disagrees with their entry's, and currencies
      * whose ledger-wide {@code SUM(amount)} is nonzero (I5 at rest, ADR-0002's Proof section).
      */
     IntegrityCounts integrityCounts();
