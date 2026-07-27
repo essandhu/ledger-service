@@ -26,6 +26,7 @@ import io.github.essandhu.ledger.domain.model.AccountId;
 import io.github.essandhu.ledger.support.fakes.FakeReconciliationRepository;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * The listener's outcome mapping (PLAN §8): completed runs close with a verdict, count under
@@ -126,6 +127,42 @@ class RunTrackingJobListenerTest {
         assertThat(gauge("ledger.reconciliation.drift.accounts"))
                 .as("gauges keep the last COMPLETED run's truth").isEqualTo(1);
         assertThat(gauge("ledger.reconciliation.drift.absolute")).isEqualTo(7);
+    }
+
+    @Test
+    @DisplayName("Batch swallows afterJob exceptions — so a verdict that cannot be recorded still counts as a failed run")
+    void unrecordable_verdict_still_counts_failed() {
+        // afterJob without beforeJob: no RUNNING row exists, so closeRun's finish update hits
+        // the RUNNING-guard and throws — the transient-outage shape.
+        UUID runId = UUID.randomUUID();
+        JobExecution execution = execution(runId, 4L);
+        StepExecution step =
+                MetaDataInstanceFactory.createStepExecution(execution, "reconcileAccountsStep", 4L);
+        step.setReadCount(1);
+        execution.addStepExecution(step);
+        execution.setStatus(BatchStatus.COMPLETED);
+
+        double failedBefore = counter("failed");
+        long durationBefore = durationCount();
+        assertThatThrownBy(() -> listener.afterJob(execution))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(counter("failed"))
+                .as("the alarm metric is emitted before the rethrow Batch will swallow")
+                .isEqualTo(failedBefore + 1);
+        assertThat(durationCount()).isEqualTo(durationBefore);
+    }
+
+    @Test
+    @DisplayName("a FAILED job whose run row was never opened: the failed count is out before failRun's loud zero-row throw")
+    void failed_count_survives_an_unopened_run() {
+        UUID runId = UUID.randomUUID();
+        JobExecution execution = execution(runId, 5L);
+        execution.setStatus(BatchStatus.FAILED);
+
+        double failedBefore = counter("failed");
+        assertThatThrownBy(() -> listener.afterJob(execution))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(counter("failed")).isEqualTo(failedBefore + 1);
     }
 
     private double counter(String outcome) {

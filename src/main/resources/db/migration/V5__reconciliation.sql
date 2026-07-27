@@ -26,10 +26,13 @@ CREATE TABLE reconciliation_run (
     id                       uuid        PRIMARY KEY,
     -- Both from the injected Clock via the application service; NO DEFAULT now(), as everywhere
     -- (the V2 principle: ambient time below the application is invisible to the ArchUnit rule).
+    -- Deliberately NO finished_at >= started_at CHECK: the two are independent wall-clock reads
+    -- with no monotonicity guarantee (the PLAN §4.6 clock-step posture), and a cross-column
+    -- temporal CHECK would reject BOTH terminal updates after a backwards step — wedging the
+    -- run in RUNNING, including the FAILED stamp. It also mirrors no domain rule: the record's
+    -- constructor enforces only the shape constraints below (the domain decides first).
     started_at               timestamptz NOT NULL,
     finished_at              timestamptz NULL,
-    CONSTRAINT reconciliation_run_finish_after_start
-        CHECK (finished_at >= started_at),
     -- RUNNING until the finish update; CLEAN/DRIFT are the job's verdict; FAILED records a run
     -- that died before producing one (its result columns stay NULL — partial counts from an
     -- aborted sweep would be a lie with decimals).
@@ -55,11 +58,17 @@ CREATE TABLE reconciliation_run (
     CONSTRAINT reconciliation_run_finished_shape
         CHECK ((status = 'RUNNING') = (finished_at IS NULL)),
     -- ... and carries results exactly when it has a verdict: CLEAN/DRIFT rows are fully
-    -- populated, RUNNING/FAILED rows are fully unpopulated.
+    -- populated, RUNNING/FAILED rows are fully unpopulated. One biconditional PER COLUMN —
+    -- a single "verdict = all-five-populated" equality would still accept a RUNNING/FAILED
+    -- row with a proper subset of the counts filled in (the equality's right side is simply
+    -- false), and a partially-populated aborted sweep is exactly the lie this CHECK exists
+    -- to refuse.
     CONSTRAINT reconciliation_run_results_shape CHECK (
-        (status IN ('CLEAN', 'DRIFT')) = (accounts_checked IS NOT NULL
-            AND drift_count IS NOT NULL AND currency_mismatch_count IS NOT NULL
-            AND posted_at_mismatch_count IS NOT NULL AND unbalanced_currency_count IS NOT NULL)),
+        ((status IN ('CLEAN', 'DRIFT')) = (accounts_checked IS NOT NULL))
+        AND ((status IN ('CLEAN', 'DRIFT')) = (drift_count IS NOT NULL))
+        AND ((status IN ('CLEAN', 'DRIFT')) = (currency_mismatch_count IS NOT NULL))
+        AND ((status IN ('CLEAN', 'DRIFT')) = (posted_at_mismatch_count IS NOT NULL))
+        AND ((status IN ('CLEAN', 'DRIFT')) = (unbalanced_currency_count IS NOT NULL))),
     -- The verdict must match the numbers it summarizes — the domain decides first, this mirrors
     -- it as defense in depth against non-API writes (the V2 rationale).
     CONSTRAINT reconciliation_run_verdict_matches_counts CHECK (

@@ -4,6 +4,7 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -160,7 +161,7 @@ class ReconciliationJobIntegrationTest {
             assertThat(gaugeValue(DRIFT_ACCOUNTS)).isEqualTo(1);
             assertThat(gaugeValue(DRIFT_ABSOLUTE)).isEqualTo(7);
         } finally {
-            restoreBalance(source, 7);
+            restoreSnapshots(source);
         }
 
         // The closing clean sweep: proves restoration AND the gauges' overwrite semantics —
@@ -203,7 +204,7 @@ class ReconciliationJobIntegrationTest {
             assertThat(gaugeValue(DRIFT_ACCOUNTS)).isEqualTo(1);
             assertThat(gaugeValue(DRIFT_ABSOLUTE)).isZero();
         } finally {
-            corruptPostingCount(source, -1);
+            restoreSnapshots(source);
         }
 
         MvcTestResult clean = trigger("recon-admin-" + UUID.randomUUID());
@@ -246,9 +247,7 @@ class ReconciliationJobIntegrationTest {
             assertThat(firstIds.get(0)).isLessThan(firstIds.get(1));
             assertThat(firstIds.get(1)).isLessThan(secondIds.get(0));
         } finally {
-            restoreBalance(a, 1);
-            restoreBalance(b, 2);
-            restoreBalance(c, 3);
+            restoreSnapshots(a, b, c);
         }
 
         MvcTestResult clean = trigger("recon-admin-" + UUID.randomUUID());
@@ -315,8 +314,28 @@ class ReconciliationJobIntegrationTest {
                         + " WHERE account_id = ?", accountId);
     }
 
-    private void restoreBalance(String accountId, long delta) throws SQLException {
-        corruptBalance(accountId, -delta);
+    /**
+     * Restore by RECOMPUTATION from the posting truth, in one superuser statement for all the
+     * accounts a test corrupted — not by reversing fixed deltas: whatever prefix of the
+     * corruptions (or of an earlier restore) actually landed, this puts the snapshots back to
+     * exactly the state the sweep verifies, idempotently, with no sibling left behind when one
+     * compensation would have thrown.
+     */
+    private void restoreSnapshots(String... accountIds) throws SQLException {
+        try (Connection superuser = DriverManager.getConnection(postgres.getJdbcUrl(),
+                postgres.getUsername(), postgres.getPassword());
+             PreparedStatement update = superuser.prepareStatement("""
+                     UPDATE account_balance SET
+                         balance = (SELECT COALESCE(SUM(p.amount), 0) FROM posting p
+                                    WHERE p.account_id = account_balance.account_id),
+                         posting_count = (SELECT COUNT(*) FROM posting p
+                                          WHERE p.account_id = account_balance.account_id)
+                     WHERE account_id = ANY (?)
+                     """)) {
+            update.setArray(1, superuser.createArrayOf("uuid",
+                    Arrays.stream(accountIds).map(UUID::fromString).toArray()));
+            assertThat(update.executeUpdate()).isEqualTo(accountIds.length);
+        }
     }
 
     private void corruptPostingCount(String accountId, long delta) throws SQLException {

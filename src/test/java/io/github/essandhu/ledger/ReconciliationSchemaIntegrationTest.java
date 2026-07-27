@@ -126,6 +126,20 @@ class ReconciliationSchemaIntegrationTest {
                     INSERT INTO reconciliation_run (id, started_at, finished_at, status, triggered_by)
                     VALUES (?, now(), now(), 'CLEAN', 'probe')
                     """);
+            // results_shape is per-column: a FAILED row with any count populated is the
+            // partial-counts lie the migration refuses (a single all-five equality would
+            // accept this row) ...
+            expectCheckViolation(migrate, """
+                    INSERT INTO reconciliation_run (id, started_at, finished_at, status, triggered_by,
+                                                    accounts_checked)
+                    VALUES (?, now(), now(), 'FAILED', 'probe', 42)
+                    """);
+            // ... and so is a RUNNING row that already claims a count.
+            expectCheckViolation(migrate, """
+                    INSERT INTO reconciliation_run (id, started_at, finished_at, status, triggered_by,
+                                                    drift_count)
+                    VALUES (?, now(), NULL, 'RUNNING', 'probe', 1)
+                    """);
             // A CLEAN row whose counts record drift violates verdict_matches_counts.
             expectCheckViolation(migrate, """
                     INSERT INTO reconciliation_run (id, started_at, finished_at, status, triggered_by,

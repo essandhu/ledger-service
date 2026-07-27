@@ -25,9 +25,14 @@ import io.github.essandhu.ledger.application.service.ReconciliationRunService;
  * the posting-duration discipline — and the drift gauges are overwritten per completed run.
  *
  * <p>In-flight samples are keyed by execution id (two concurrent sweeps are legal — they only
- * append their own findings), and callback failures are deliberately loud: an exception here
- * cannot un-fail the job, and a run row left RUNNING plus Batch's own logged metadata is a
- * truthful record of a listener that could not reach the database.
+ * append their own findings). Batch SWALLOWS afterJob exceptions (logged, never rethrown), so
+ * an exception here cannot alert anyone — which is why the {@code outcome=failed} count is
+ * emitted BEFORE the record write it describes, and a completed sweep whose verdict could not
+ * be recorded still counts as {@code failed}: the counter is the alarm that must survive
+ * exactly when the database is failing. Record-write exceptions are then rethrown into
+ * Batch's afterJob log line — loud in the logs, already counted in the metrics; the run row
+ * such a failure leaves RUNNING (or absent, when openRun itself failed) plus Batch's own
+ * metadata is a truthful record of what happened.
  */
 class RunTrackingJobListener implements JobExecutionListener {
 
@@ -64,15 +69,26 @@ class RunTrackingJobListener implements JobExecutionListener {
             long accountsChecked = jobExecution.getStepExecutions().stream()
                     .mapToLong(StepExecution::getReadCount)
                     .sum();
-            ReconciliationRunService.Closed closed =
-                    runService.closeRun(runId(jobExecution), accountsChecked);
+            ReconciliationRunService.Closed closed;
+            try {
+                closed = runService.closeRun(runId(jobExecution), accountsChecked);
+            } catch (RuntimeException e) {
+                // The step completed but the verdict could not be recorded: as a RUN that is
+                // a failure, counted before the rethrow because Batch only logs what escapes
+                // afterJob. Sample discarded (completed-and-recorded sweeps only); gauges
+                // keep the last recorded truth.
+                registry.counter(RUNS, "outcome", "failed").increment();
+                throw e;
+            }
             gauges.record(closed.results().driftCount(), closed.absoluteDrift());
             registry.counter(RUNS, "outcome",
                     closed.verdict().name().toLowerCase(Locale.ROOT)).increment();
             sample.stop(registry.timer(DURATION));
         } else {
-            runService.failRun(runId(jobExecution));
+            // Counter FIRST: if openRun never ran (beforeJob failed), failRun's RUNNING-guard
+            // throws — rightly loud in Batch's log, but the alert metric must already be out.
             registry.counter(RUNS, "outcome", "failed").increment();
+            runService.failRun(runId(jobExecution));
             // Sample discarded: the duration series records completed sweeps only.
         }
     }

@@ -251,6 +251,10 @@ class AuthzMatrixIntegrationTest {
                 new Cell("HEAD", "RUN_FINDINGS", NO_ROLES, 403),
                 new Cell("HEAD", "RUN_FINDINGS", "LEDGER_READ", 200),
 
+                // PLAN §5 defines no reconciliation-runs collection listing — the namespace
+                // backstop holds it, even for LEDGER_READ (the journal-entries precedent).
+                new Cell("GET", "/api/v1/reconciliation-runs", "LEDGER_READ", 403),
+
                 // springdoc surfaces: any authenticated principal, no role required
                 new Cell("GET", "/v3/api-docs", NONE, 401),
                 new Cell("GET", "/v3/api-docs", NO_ROLES, 200),

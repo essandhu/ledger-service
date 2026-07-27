@@ -54,6 +54,23 @@ class ReconciliationApiIntegrationTest {
     }
 
     @Test
+    @DisplayName("a subject-less admin token is a defective CREDENTIAL: 401 before any sweep runs")
+    void subjectless_token_cannot_trigger() {
+        // The M2 posture: created_by (here triggered_by) comes from the JWT subject, and a
+        // syntactically valid token without one is refused 401 + WWW-Authenticate — the
+        // sweep is never started on an unattributable say-so.
+        var result = mvc.post().uri("/api/v1/reconciliation-runs")
+                .with(jwt().jwt(j -> j.subject("")
+                        .claim("realm_access", Map.of("roles", List.of("LEDGER_ADMIN"))))
+                        .authorities(new LedgerRealmRoleConverter()))
+                .exchange();
+        assertThat(result)
+                .hasStatus(HttpStatus.UNAUTHORIZED)
+                .hasContentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON);
+        assertThat(result.getResponse().getHeader("WWW-Authenticate")).startsWith("Bearer");
+    }
+
+    @Test
     @DisplayName("findings paging bounds are enforced at the web boundary — bare 400s")
     void findings_paging_bounds_are_enforced() {
         String findings = "/api/v1/reconciliation-runs/" + UUID.randomUUID() + "/findings";
