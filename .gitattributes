@@ -8,3 +8,4 @@ gradlew.bat text eol=crlf
 # Binaries.
 *.jar binary
 *.png binary
+*.gif binary

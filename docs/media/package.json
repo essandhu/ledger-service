@@ -1,0 +1,12 @@
+{
+  "name": "ledger-media-capture",
+  "private": true,
+  "type": "module",
+  "description": "Playwright screenshot capture for the README's media (docs/media/README.md). Not part of the Gradle build.",
+  "scripts": {
+    "capture": "node capture.mjs"
+  },
+  "devDependencies": {
+    "playwright": "^1.56.0"
+  }
+}

@@ -1,0 +1,7 @@
+# The Dockerfile copies exactly the Gradle inputs and src/; everything else is context weight
+# uploaded to the daemon on every `docker compose build`. Notably docs/media carries a local
+# Playwright install once the README screenshots have been regenerated (docs/media/README.md).
+.git/
+.gradle/
+build/
+docs/
