@@ -1,0 +1,16 @@
+# CDS training profile — used ONLY by the Dockerfile's archive-creation run, never served.
+# The training run performs a full context refresh with no database on the network; everything
+# here exists to keep eager DB touchpoints offline (the Batch JobRepository counterpart is
+# CdsTrainingBatchConfiguration — it needs a bean, not a property). Kept in the shipped jar:
+# inert unless the profile is activated, and the Dockerfile is the only activator.
+spring:
+  flyway:
+    enabled: false
+  jpa:
+    hibernate:
+      ddl-auto: none   # validate (the served default) would inspect the missing schema
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    properties:
+      hibernate:
+        boot:
+          allow_jdbc_metadata_access: false

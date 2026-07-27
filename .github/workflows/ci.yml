@@ -114,7 +114,7 @@ jobs:
           code=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $token" \
             http://localhost:8080/actuator/metrics)
           if [ "$code" != "200" ]; then
-            echo "expected 200 on authenticated actuator call, got $code"
+            echo "expected 200 on the LEDGER_METRICS-bearing actuator call (ADR-0006), got $code"
             exit 1
           fi
           echo "token flow OK — Keycloak-issued JWT accepted by the resource server"
@@ -437,9 +437,9 @@ jobs:
 
           # --- M6 demo (PLAN §9, ADR-0002, I15): reconcile clean, induce drift via superuser
           # SQL, reconcile again — the run flags it, the finding pins the delta, and the drift
-          # gauges fire on /actuator/prometheus. The scrape needs a token (prometheus shares
-          # port 8080 behind oauth — the accepted M1 deviation) and the exposition renames
-          # ledger.reconciliation.* to ledger_reconciliation_*.
+          # gauges fire on /actuator/prometheus. The scrape needs a LEDGER_METRICS token
+          # (M7, ADR-0006 — ledger-cli's service account carries the role) and the exposition
+          # renames ledger.reconciliation.* to ledger_reconciliation_*.
           run=$(curl -s -w '\n%{http_code}' -X POST -H "Authorization: Bearer $token" \
             http://localhost:8080/api/v1/reconciliation-runs)
           code=$(tail -n 1 <<< "$run")

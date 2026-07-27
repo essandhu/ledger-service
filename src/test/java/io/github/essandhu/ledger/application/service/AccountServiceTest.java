@@ -195,6 +195,29 @@ class AccountServiceTest {
     }
 
     @Test
+    @DisplayName("corruption guard: a lifecycle transition on an account with no balance row fails loudly, naming the account — never proceeds unlocked")
+    void status_transition_without_balance_row_fails_loudly() {
+        // An account row with NO snapshot row is unreachable through any code path (V3
+        // backfill + create-tx insert), so the fixture seeds the corruption directly: account
+        // fake only, balance fake untouched. The transition must report the broken V2
+        // forward-contract rather than treat the empty lock result as a held lock.
+        Account account = Account.open(new AccountId(ID), "Operating cash",
+                new CurrencyCode("EUR"), AccountType.ASSET, false, T0);
+        repository.seed(account);
+        AccountService service = serviceAt(T1);
+
+        UpdateAccountCommand freeze = new UpdateAccountCommand(
+                new AccountId(ID), Optional.empty(), Optional.of(AccountStatus.FROZEN));
+        assertThatThrownBy(() -> service.update(freeze))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining(ID.toString())
+                .hasMessageContaining("V2 forward-contract");
+
+        assertThat(repository.updateCalls()).isZero();
+        assertThat(repository.findById(new AccountId(ID))).contains(account);
+    }
+
+    @Test
     @DisplayName("I12 (posting half): close with a nonzero natural balance is rejected under the lock, nothing written")
     void close_with_nonzero_balance_writes_nothing() {
         seededActive();

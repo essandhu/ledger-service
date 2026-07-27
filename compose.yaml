@@ -84,5 +84,50 @@ services:
       retries: 30
       start_period: 40s
 
+  # --- Observability (M7 stretch, ADR-0006) — opt-in profile so the default stack stays lean:
+  #   docker compose --profile observability up -d
+  #   docker compose --profile observability down   (plain `down` won't stop these two)
+  prometheus:
+    image: prom/prometheus:v3.13.1
+    profiles: ["observability"]
+    volumes:
+      - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+    depends_on:
+      app:
+        condition: service_healthy
+    healthcheck:
+      # promtool ships in the image and defaults to localhost:9090 — unlike wget it also
+      # survives a switch to the -distroless image variants.
+      test: ["CMD", "promtool", "check", "healthy"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  grafana:
+    image: grafana/grafana:13.1.1
+    profiles: ["observability"]
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin        # dev/demo stack only — never production settings
+      # Anonymous Viewer so the demo dashboard is one click, no login wall.
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+    volumes:
+      - ./docker/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./docker/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "3000:3000"
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    healthcheck:
+      # The official image ships no curl (grafana/grafana#82869); busybox wget does the job.
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
 volumes:
   pgdata:

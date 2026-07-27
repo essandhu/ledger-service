@@ -245,6 +245,29 @@ class PostingServiceTest {
     }
 
     @Test
+    @DisplayName("corruption guard: a locked balance row whose account row is missing fails loudly, naming the FK — never an NPE")
+    void balance_row_without_account_row_fails_loudly_not_npe() {
+        AccountId cash = seeded(LOW, AccountType.ASSET, false, EUR, 250);
+        // A balance row with NO account row is unreachable through any code path
+        // (account_balance carries a FK to account), so the fixture seeds the corruption
+        // directly into the balance fake alone. The guard must file it as corruption with the
+        // suspect FK named, not fall through to an NPE at the status check three lines later.
+        AccountId orphan = new AccountId(MID);
+        balances.seed(new AccountBalance(orphan, 0, 0, T0));
+        PostingService service = service();
+
+        assertThatThrownBy(() -> service.postEntry(entryOf(leg(cash, 100), leg(orphan, -100))))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("account_balance FK")
+                .hasMessageContaining(orphan.value().toString());
+
+        assertThat(balances.lockInvocations())
+                .as("the guard runs UNDER the lock — the orphan passed the step-3 existence check")
+                .hasSize(1);
+        assertNothingWritten();
+    }
+
+    @Test
     @DisplayName("currency mismatch: a leg's currency must match its account's (PLAN §4.2)")
     void leg_currency_must_match_account_currency() {
         AccountId cash = seeded(LOW, AccountType.ASSET, false, EUR, 250);
@@ -298,9 +321,12 @@ class PostingServiceTest {
         PostingService service = service();
 
         assertThatThrownBy(() -> service.postEntry(entryOf(leg(cash, -150), leg(sink, 150))))
-                .isInstanceOf(OverdraftViolation.class)
-                .hasFieldOrPropertyWithValue("accountId", cash)
-                .hasFieldOrPropertyWithValue("attemptedNaturalBalance", -50L);
+                .isInstanceOfSatisfying(OverdraftViolation.class, violation -> {
+                    assertThat(violation.accountId()).isEqualTo(cash);
+                    assertThat(violation.attemptedNaturalBalance())
+                            .as("the would-be NATURAL balance, sign intact — the client's fix-it number")
+                            .isEqualTo(-50L);
+                });
         assertNothingWritten();
     }
 
@@ -483,6 +509,27 @@ class PostingServiceTest {
     }
 
     @Test
+    @DisplayName("ADR-0001: a transfer of Long.MIN_VALUE rejects as AmountOverflow — negateExact's lone impossible input, translated at the accumulation point")
+    void transfer_of_long_min_value_rejects_as_amount_overflow() {
+        AccountId source = seeded(LOW, AccountType.ASSET, true, EUR, 0);
+        AccountId target = seeded(MID, AccountType.ASSET, true, EUR, 0);
+        PostingService service = service();
+        // Money imposes no range restriction, so MIN_VALUE reaches the target-leg negation —
+        // where −Long.MIN_VALUE has no 64-bit representation. The service must translate the
+        // refusal into the 422, not leak the raw ArithmeticException as a 500.
+        TransferCommand command = new TransferCommand(source, target,
+                Money.of(Long.MIN_VALUE, EUR), null, "posting-tester", IDEM_KEY);
+
+        assertThatThrownBy(() -> service.transfer(command))
+                .isInstanceOf(AmountOverflow.class)
+                .hasMessageContaining("transfer amount has no 64-bit negation");
+
+        assertThat(balances.lockInvocations())
+                .as("rejected while building the draft, before any lock").isEmpty();
+        assertNothingWritten();
+    }
+
+    @Test
     @DisplayName("I11: a reversal negates every leg exactly, positionally, linked via reversalOf")
     void reversal_negates_every_leg_exactly() {
         AccountId cash = seeded(LOW, AccountType.ASSET, false, EUR, 100);
@@ -503,6 +550,38 @@ class PostingServiceTest {
     }
 
     @Test
+    @DisplayName("ADR-0001: reversing an entry with a Long.MIN_VALUE leg rejects as AmountOverflow naming the original — never a raw ArithmeticException")
+    void reversal_of_long_min_value_leg_rejects_as_amount_overflow() {
+        // The MIN_VALUE leg is constructible through the FRONT DOOR: no two-leg entry can
+        // balance it (−Long.MIN_VALUE does not exist), but three legs can — MIN_VALUE +
+        // MAX_VALUE = −1, then −1 + 1 = 0, every partial sum representable IN THIS LEG ORDER,
+        // so the draft's checked accumulation accepts what no negation ever could. ASSET keeps
+        // natural = raw (direction +1) and allowNegative skips the overdraft floor, so the
+        // legs land without tripping any other overflow guard.
+        AccountId sink = seeded(LOW, AccountType.ASSET, true, EUR, 0);
+        AccountId brimming = seeded(MID, AccountType.ASSET, true, EUR, 0);
+        AccountId penny = seeded(HIGH, AccountType.ASSET, true, EUR, 0);
+        PostingService service = service();
+        JournalEntry original = posted(service.postEntry(entryOf(
+                leg(sink, Long.MIN_VALUE), leg(brimming, Long.MAX_VALUE), leg(penny, 1))));
+
+        // A fresh key: the reversal is its own logical operation — reusing the post's key
+        // would surface as the hash-mismatch conflict, not the negation edge under test.
+        ReverseCommand reverse = new ReverseCommand(original.id(), null, "posting-tester",
+                IDEM_KEY + "-reversal");
+        assertThatThrownBy(() -> service.reverse(reverse))
+                .isInstanceOf(AmountOverflow.class)
+                .hasMessageContaining("reversal of entry " + original.id().value())
+                .hasMessageContaining("no 64-bit negation");
+
+        assertThat(journal.insertCalls()).as("the original stands alone").isEqualTo(1);
+        assertThat(balances.lockInvocations())
+                .as("rejected while negating the draft — the reversal never reached the lock")
+                .hasSize(1);
+        assertThat(idempotencyStore.insertCalls()).as("no record for a rejection").isEqualTo(1);
+    }
+
+    @Test
     @DisplayName("I11: a second reversal is rejected INSIDE the locked section, and writes nothing")
     void second_reversal_rejected_inside_the_lock() {
         AccountId cash = seeded(LOW, AccountType.ASSET, false, EUR, 100);
@@ -515,7 +594,10 @@ class PostingServiceTest {
 
         assertThatThrownBy(() -> service.reverse(
                 new ReverseCommand(original.id(), null, "posting-tester", IDEM_KEY)))
-                .isInstanceOf(EntryAlreadyReversed.class);
+                .isInstanceOfSatisfying(EntryAlreadyReversed.class, error ->
+                        assertThat(error.originalId())
+                                .as("the 422 names the ORIGINAL — the existing reversal is the fix, not a retry")
+                                .isEqualTo(original.id()));
 
         // The at-most-once check must run under the lock (the lock serializes the race; the
         // partial unique index is only the backstop) — so the lock WAS acquired first.

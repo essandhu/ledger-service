@@ -18,10 +18,13 @@ import org.springframework.security.web.SecurityFilterChain;
  * literal transcription of the table). The second layer is {@code @PreAuthorize} on the
  * use-case methods, enabled here.
  *
- * <p>Known deviation, accepted for M1: PLAN §5 marks {@code /actuator/prometheus} as
- * management-port-internal; it currently shares port 8080 and is reachable by ANY authenticated
- * principal. Resolution (management-port split in compose, or a dedicated role) is ops polish —
- * tracked for M7.
+ * <p>Metrics exposure (M7, closing the M1 deviation): {@code /actuator/metrics} and
+ * {@code /actuator/prometheus} require the dedicated {@code LEDGER_METRICS} role — both gated
+ * together because they expose the same registry in different formats. The alternative, a
+ * management-port split, was rejected: it is unreachable from the MockMvc harness (a separate
+ * management context only materializes in a real servlet container), moves {@code /actuator/health}
+ * out from under the compose healthcheck, and the port would have to be published anyway for the
+ * smoke scrape — the trade-off is recorded in ADR-0006.
  */
 @Configuration(proxyBeanMethods = false)
 @EnableMethodSecurity
@@ -90,6 +93,11 @@ class SecurityConfig {
                         // granted above exist — new endpoints must add explicit rules, and an
                         // unlisted method (PUT, DELETE, ...) is 403 for everyone.
                         .requestMatchers("/api/v1/**").denyAll()
+                        // M7 metrics exposure (closes the M1 deviation, ADR-0006): the metric
+                        // surfaces need LEDGER_METRICS — same no-hierarchy posture as the API
+                        // roles, so ADMIN cannot scrape and the scraper cannot post.
+                        .requestMatchers(EndpointRequest.to("metrics", "prometheus"))
+                        .hasRole("LEDGER_METRICS")
                         // Everything else — remaining actuator, springdoc, unknown paths —
                         // requires a valid JWT: default-deny stays the baseline (M0 seed of I13).
                         .anyRequest().authenticated())

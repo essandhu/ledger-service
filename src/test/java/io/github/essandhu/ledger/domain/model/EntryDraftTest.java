@@ -113,19 +113,21 @@ class EntryDraftTest {
     class LegRules {
 
         @Test
-        @DisplayName("rejects an empty draft — double-entry needs two sides")
+        @DisplayName("rejects an empty draft, reporting a count of zero — double-entry needs two sides")
         void rejects_empty_legs() {
+            // Asserted through the accessor, not field reflection: count() is the error's
+            // structured contract, and only a real call pins it.
             assertThatThrownBy(() -> new EntryDraft(null, List.of()))
-                    .isInstanceOf(TooFewPostings.class)
-                    .hasFieldOrPropertyWithValue("count", 0);
+                    .isInstanceOfSatisfying(TooFewPostings.class,
+                            error -> assertThat(error.count()).isZero());
         }
 
         @Test
-        @DisplayName("rejects a single-leg draft — it would create or destroy value")
+        @DisplayName("rejects a single-leg draft, reporting the offending count — it would create or destroy value")
         void rejects_single_leg() {
             assertThatThrownBy(() -> new EntryDraft(null, List.of(leg(CASH, 100, EUR))))
-                    .isInstanceOf(TooFewPostings.class)
-                    .hasFieldOrPropertyWithValue("count", 1);
+                    .isInstanceOfSatisfying(TooFewPostings.class,
+                            error -> assertThat(error.count()).isEqualTo(1));
         }
 
         @Test

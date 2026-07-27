@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import io.github.essandhu.ledger.domain.model.AccountId;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /** The pair comparison ADR-0002 pins: either half disagreeing is drift. */
@@ -52,7 +53,18 @@ class BalanceComparisonTest {
     @Test
     @DisplayName("a negative snapshot watermark is representable — corruption is subject matter, not a constructor veto")
     void negative_snapshot_count_is_representable() {
+        // Deliberately asymmetric with the computedCount guard below: a corrupted snapshot
+        // watermark must flow INTO a finding, not explode the sweep — "fixing" the missing
+        // range check would turn the detector's own subject matter into a crash.
         BalanceComparison comparison = new BalanceComparison(ACCOUNT, 0, -1, 0, 0);
         assertThat(comparison.drifted()).isTrue();
+    }
+
+    @Test
+    @DisplayName("a negative computed count is rejected — COUNT(*) cannot produce one, so it can only be our bug")
+    void negative_computed_count_is_rejected() {
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> new BalanceComparison(ACCOUNT, 0, 0, 0, -1))
+                .withMessageContaining("-1");
     }
 }

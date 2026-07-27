@@ -40,6 +40,12 @@
     text for the block-instead-of-409 behavior and the mutable-response caveat are
     discharged by PLAN §5's M4 pin for now; client-facing API documentation lands with M7's
     docs polish.
+- **M7 (2026-07-26)**: the deferred client-facing text is discharged into the OpenAPI spec —
+  an `OperationCustomizer` in `OpenApiConfig` keys off the `Idempotency-Key` parameter, so
+  every money mover (present and future) carries the replay/conflict semantics including both
+  IETF-draft deviations (block-instead-of-409, responses not immutable over time);
+  `OpenApiDocumentationTest` asserts the text on all three operations, and the README's API
+  notes restate it for readers who never open Swagger.
 
 ## Context and problem statement
 

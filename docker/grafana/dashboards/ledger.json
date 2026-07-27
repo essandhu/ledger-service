@@ -1,0 +1,333 @@
+{
+  "id": null,
+  "uid": "ledger",
+  "title": "Ledger Service",
+  "tags": ["ledger"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 0,
+  "refresh": "10s",
+  "time": { "from": "now-15m", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Accounts adrift (at last completed run)",
+      "description": "ledger.reconciliation.drift.accounts — I15's headline gauge. Anything above zero means a snapshot disagrees with its postings.",
+      "gridPos": { "h": 6, "w": 5, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 1 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "ledger_reconciliation_drift_accounts",
+          "legendFormat": "accounts adrift"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Absolute drift (minor units)",
+      "description": "ledger.reconciliation.drift.absolute — sum of |snapshot − computed| across flagged accounts, at the last completed run.",
+      "gridPos": { "h": 6, "w": 5, "x": 5, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 1 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "ledger_reconciliation_drift_absolute",
+          "legendFormat": "absolute drift"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Reconciliation runs by outcome (per hour)",
+      "description": "ledger.reconciliation.runs — outcome colors are fixed to the state they name, not to series order.",
+      "gridPos": { "h": 6, "w": 14, "x": 10, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "drawStyle": "line"
+          }
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "clean" },
+            "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "green" } }] },
+          { "matcher": { "id": "byName", "options": "drift" },
+            "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } }] },
+          { "matcher": { "id": "byName", "options": "failed" },
+            "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "orange" } }] }
+        ]
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (outcome) (increase(ledger_reconciliation_runs_total[1h]))",
+          "legendFormat": "{{outcome}}"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Posting throughput (ops/s)",
+      "description": "rate of ledger.posting.duration count — split by entry type and outcome. Counters appear on first use: a fresh stack shows no series until traffic flows.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 6 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "drawStyle": "line"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (entry_type, outcome) (rate(ledger_posting_duration_seconds_count[1m]))",
+          "legendFormat": "{{entry_type}} {{outcome}}"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Posting latency",
+      "description": "avg = rate(sum)/rate(count); max is the Micrometer decaying max. No histogram buckets are published, so no percentiles — by design.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 6 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "drawStyle": "line"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(ledger_posting_duration_seconds_sum[5m])) / sum(rate(ledger_posting_duration_seconds_count[5m]))",
+          "legendFormat": "avg"
+        },
+        {
+          "refId": "B",
+          "expr": "max(ledger_posting_duration_seconds_max)",
+          "legendFormat": "max"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Rejections by reason (per hour)",
+      "description": "ledger.posting.rejected — reason tags are the RFC 9457 problem slugs verbatim (unbalanced-entry, overdraft, account-frozen, ...).",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 14 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "drawStyle": "line"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (reason) (increase(ledger_posting_rejected_total[1h]))",
+          "legendFormat": "{{reason}}"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Balance-lock wait",
+      "description": "ledger.posting.lock.wait — time spent acquiring the ordered FOR UPDATE locks (ADR-0003); the hot-account contention signal.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 14 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "drawStyle": "line"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(ledger_posting_lock_wait_seconds_sum[5m])) / sum(rate(ledger_posting_lock_wait_seconds_count[5m]))",
+          "legendFormat": "avg"
+        },
+        {
+          "refId": "B",
+          "expr": "max(ledger_posting_lock_wait_seconds_max)",
+          "legendFormat": "max"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "type": "stat",
+      "title": "Idempotency replays (1h)",
+      "description": "ledger.idempotency.replayed — retries answered from the record instead of re-executing (I8).",
+      "gridPos": { "h": 6, "w": 5, "x": 0, "y": 22 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "unit": "short", "noValue": "0",
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "text", "value": null }] } },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "none",
+        "graphMode": "area",
+        "textMode": "value"
+      },
+      "targets": [
+        { "refId": "A", "expr": "sum(increase(ledger_idempotency_replayed_total[1h]))", "legendFormat": "replays" }
+      ]
+    },
+    {
+      "id": 9,
+      "type": "stat",
+      "title": "Idempotency conflicts (1h)",
+      "description": "ledger.idempotency.conflict — same key, different payload: rejected with zero side effects (I9).",
+      "gridPos": { "h": 6, "w": 5, "x": 5, "y": 22 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "unit": "short", "noValue": "0",
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "text", "value": null }] } },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "none",
+        "graphMode": "area",
+        "textMode": "value"
+      },
+      "targets": [
+        { "refId": "A", "expr": "sum(increase(ledger_idempotency_conflict_total[1h]))", "legendFormat": "conflicts" }
+      ]
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Reconciliation sweep duration",
+      "description": "ledger.reconciliation.duration — completed-and-recorded sweeps only; FAILED runs record nothing here.",
+      "gridPos": { "h": 6, "w": 14, "x": 10, "y": 22 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "drawStyle": "line"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(ledger_reconciliation_duration_seconds_sum[15m])) / sum(rate(ledger_reconciliation_duration_seconds_count[15m]))",
+          "legendFormat": "avg"
+        },
+        {
+          "refId": "B",
+          "expr": "max(ledger_reconciliation_duration_seconds_max)",
+          "legendFormat": "max"
+        }
+      ]
+    }
+  ]
+}

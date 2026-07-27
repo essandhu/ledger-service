@@ -22,6 +22,7 @@ Format: [MADR](https://adr.github.io/madr/)-style, one file per decision, immuta
 | [ADR-0003](ADR-0003-concurrency-control.md) | Concurrency control for postings — pessimistic ordered row locks | Accepted |
 | [ADR-0004](ADR-0004-idempotency.md) | Idempotency key design and retention | Accepted |
 | [ADR-0005](ADR-0005-property-testing-tooling.md) | Property-based testing tooling — in-repo harness | Accepted |
+| [ADR-0006](ADR-0006-observability-exposure.md) | Observability exposure — dedicated metrics role, OAuth2 scrape | Accepted |
 
 ## Future ADR candidates
 
