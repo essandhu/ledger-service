@@ -1,0 +1,18 @@
+<!doctype html>
+<!-- Row-shaped error fragment for htmx swaps whose target is a table row (the load-more
+     sentinel): a bare <section> under <tbody> is not table-legal, so the problem card rides
+     inside a cell. Its own template for the same reason as statement-rows.html — a fragment
+     defined inside a page template also renders at its definition site. -->
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<body>
+<table>
+<tbody th:fragment="problemRow" th:remove="tag">
+<tr class="load-more-row error-row">
+    <td colspan="4">
+        <th:block th:insert="~{error :: problem}"></th:block>
+    </td>
+</tr>
+</tbody>
+</table>
+</body>
+</html>

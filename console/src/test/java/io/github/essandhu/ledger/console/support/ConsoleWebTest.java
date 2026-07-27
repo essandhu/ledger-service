@@ -34,6 +34,6 @@ import org.springframework.context.annotation.Import;
 @Inherited
 @SpringBootTest
 @AutoConfigureMockMvc
-@Import(TestClientRegistrations.class)
+@Import({TestClientRegistrations.class, RestClientTestSupport.class})
 public @interface ConsoleWebTest {
 }

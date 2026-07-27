@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments :: head('Ledger console — account')}"></head>
+<body>
+<header th:replace="~{fragments :: topbar('accounts')}"></header>
+
+<main class="wide">
+    <section class="identity-card" aria-labelledby="account-heading">
+        <header>
+            <span id="account-heading">Account</span>
+            <span class="folio mono" th:text="${account.id}">9b2e-uuid</span>
+        </header>
+        <div class="identity-body account-head">
+            <div>
+                <p class="account-line" th:text="${account.name}">demo-operating</p>
+                <p class="account-meta">
+                    <span class="type-tag" th:text="${account.type}">LIABILITY</span>
+                    <span th:class="|status-badge status-${statusCss}|"
+                          th:text="${account.status}">ACTIVE</span>
+                    <span class="mono" th:text="${account.currency}">EUR</span>
+                    <span th:text="${account.allowNegative} ? 'may go negative' : 'floor at zero'">floor at zero</span>
+                </p>
+                <p class="account-times">
+                    created <time th:attr="datetime=${account.createdAt}"
+                                  th:text="${account.createdAt}">2026-07-27T10:00:00Z</time>
+                    · updated <time th:attr="datetime=${account.updatedAt}"
+                                    th:text="${account.updatedAt}">2026-07-27T10:00:00Z</time>
+                </p>
+            </div>
+            <div class="balance-card">
+                <p class="balance-label"
+                   th:text="${balance.asOf} != null ? 'Balance as of' : 'Balance'">Balance</p>
+                <p th:if="${balance.asOf}" class="balance-asof">
+                    <time th:attr="datetime=${balance.asOf}" th:text="${balance.asOf}">2026-07-27T10:00:00Z</time>
+                </p>
+                <!-- The NATURAL figure: raw × direction(type) — what a bookkeeper expects.
+                     A LIABILITY at raw −12345 shows +123.45 (value still owed). -->
+                <p class="balance-figure mono" th:classappend="${balance.negative} ? 'negative'"
+                   th:text="${balance.natural}">123.45 EUR</p>
+                <p class="balance-raw">raw (debit-positive) <span class="mono"
+                        th:text="${balance.raw}">-123.45 EUR</span>
+                    · <span th:text="${balance.postingCount}">2</span> postings</p>
+                <form class="asof-form" method="get"
+                      th:action="@{/accounts/{id}(id=${account.id})}">
+                    <input type="text" name="at" th:value="${at}"
+                           placeholder="as of, UTC — 2026-07-27T12:00:00Z"
+                           aria-label="Balance as of (ISO-8601 UTC instant)">
+                    <button type="submit">As of</button>
+                    <a th:if="${at}" th:href="@{/accounts/{id}(id=${account.id})}">Live</a>
+                </form>
+                <p class="field-error" th:if="${atError}" th:text="${atError}">bad instant</p>
+            </div>
+        </div>
+    </section>
+
+    <section class="panel" aria-labelledby="statement-heading">
+        <header class="panel-head">
+            <h1 id="statement-heading">Statement</h1>
+            <p class="panel-note">oldest first, as the ledger orders it — sides derive from the
+                sign (positive = debit)<th:block th:if="${at == null}">; the full statement's
+                raw amounts sum to the raw balance</th:block><th:block th:if="${at != null}">;
+                the statement shows the CURRENT ledger, not the as-of window above</th:block></p>
+        </header>
+        <div class="table-scroll">
+            <table class="ruled">
+                <thead>
+                <tr><th>Posted</th><th>Entry</th><th>Side</th><th class="num">Amount (raw)</th></tr>
+                </thead>
+                <tbody>
+                <tr th:if="${#lists.isEmpty(lines)}">
+                    <td colspan="4" class="empty">No postings on this account yet.</td>
+                </tr>
+                <th:block th:insert="~{statement-rows :: statementRows}"></th:block>
+                </tbody>
+            </table>
+        </div>
+    </section>
+</main>
+
+<th:block th:replace="~{fragments :: scripts}"></th:block>
+</body>
+</html>

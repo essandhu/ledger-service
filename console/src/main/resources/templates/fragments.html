@@ -1,0 +1,44 @@
+<!doctype html>
+<!-- Shared page chrome (M8b): head, top bar, scripts. Pages compose these with
+     th:replace/th:insert — plain Thymeleaf fragments, no layout dialect (one less
+     dependency to defend). -->
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:fragment="head(title)">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <!-- The CSP forbids injected style tags, so htmx must not add its indicator styles. -->
+    <meta name="htmx-config" content='{"includeIndicatorStyles":false}'>
+    <title th:text="${title}">Ledger console</title>
+    <link rel="stylesheet" th:href="@{/css/console.css}" href="../static/css/console.css">
+</head>
+<body>
+
+<header class="topbar" th:fragment="topbar(active)">
+    <a class="wordmark" th:href="@{/whoami}" href="whoami.html">LEDGER<span class="tick">/</span>console</a>
+    <nav class="topnav">
+        <a th:href="@{/accounts}" href="accounts.html"
+           th:classappend="${active == 'accounts'} ? 'active'">Accounts</a>
+        <a th:href="@{/whoami}" href="whoami.html"
+           th:classappend="${active == 'whoami'} ? 'active'">Whoami</a>
+    </nav>
+    <div class="topbar-session">
+        <span class="whoami-name" th:text="${#authentication?.name}">ops</span>
+        <!-- POST, not a link: logout is state-changing and CSRF-protected; Thymeleaf adds
+             the hidden _csrf field to th:action forms automatically. -->
+        <form th:action="@{/logout}" action="#" method="post">
+            <button class="signout" type="submit">Sign out</button>
+        </form>
+    </div>
+</header>
+
+<th:block th:fragment="scripts">
+    <!-- htmx 2.0.10, vendored from https://cdn.jsdelivr.net/npm/htmx.org@2.0.10/dist/htmx.min.js;
+         sha384-H5SrcfygHmAuTDZphMHqBJLc3FhssKjG7w/CeCpFReSfwBWDTKpkzPP8c+cLsK+V verified
+         against htmx.org's published SRI at download (2026-07-27, ADR-0007 vendoring
+         decision). Re-verify the hash when bumping the version. -->
+    <script th:src="@{/js/htmx.min.js}" src="../static/js/htmx.min.js"></script>
+    <script th:src="@{/js/app.js}" src="../static/js/app.js"></script>
+</th:block>
+
+</body>
+</html>

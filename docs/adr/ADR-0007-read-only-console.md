@@ -147,6 +147,17 @@ are branch-protection keys and only ever added, never renamed. The core's Docker
 copies only the console's build script (settings evaluation needs it) and builds `:bootJar`,
 root-scoped.
 
+## Erratum (2026-07-27, M8b — factual correction, decision unchanged)
+
+The token-relay option 1 wording "no `OAuth2AuthorizedClientManager` bean is auto-published
+in servlet apps" is true of **Boot's** autoconfiguration but incomplete: Spring **Security**
+7.1's `OAuth2AuthorizedClientManagerRegistrar` auto-registers a `DefaultOAuth2AuthorizedClientManager`
+when unique `ClientRegistrationRepository` and `OAuth2AuthorizedClientRepository` beans exist
+(which Boot provides). The chosen design is unaffected — the console defines the manager bean
+explicitly (suppressing the registrar's), and that explicitness turned out to be load-bearing:
+spring-security-test's `oidcLogin()` seam and the relay tests reach the manager only because
+it is the unique bean (`ApiClientConfig` records why).
+
 ## Proof
 
 - `WhoamiPageTest`: unauthenticated requests bounce to Keycloak; the `ops` session renders the

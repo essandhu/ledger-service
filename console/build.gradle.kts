@@ -33,10 +33,20 @@ dependencies {
     // (3.1.5.RELEASE) and it carries Security 7 support — Central's search index is stale on
     // this; trust the BOM (ADR-0007).
     implementation("org.thymeleaf.extras:thymeleaf-extras-springsecurity6")
+    // M8b token relay: RestClientBuilderConfigurer, so the hand-built API client uses Boot's
+    // auto-configured message converters (the app's Jackson settings, not a framework-default
+    // mapper) AND so tests can bind a MockRestServiceServer through the same configurer path.
+    // (Jackson 3 bundles java.time in databind, so Instants would parse either way — the
+    // converters and the test seam are the real reasons.)
+    implementation("org.springframework.boot:spring-boot-restclient")
 
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.springframework.boot:spring-boot-starter-webmvc-test")
     testImplementation("org.springframework.security:spring-security-test")
+    // MockServerRestClientCustomizer — binds the API client's builder to a MockRestServiceServer
+    // through the SAME configurer path production uses, so bind-before-build ordering is moot.
+    testImplementation("org.springframework.boot:spring-boot-restclient-test")
+    testImplementation(libs.jsoup)
 }
 
 tasks.test {

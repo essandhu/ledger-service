@@ -46,10 +46,11 @@ class ConsoleSecurityConfig {
                         // ;jsessionid — the REQUEST dispatch below still authenticates first.
                         .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
                         // Anonymous surface (ADR-0007): the core's health rule plus the
-                        // static assets a browser needs — CSS and favicon must survive the
-                        // Keycloak-bounce round trip without a session.
+                        // static assets a browser needs — CSS, JS (htmx + the time
+                        // localizer), and favicon must survive the Keycloak-bounce round
+                        // trip without a session.
                         .requestMatchers(EndpointRequest.to("health")).permitAll()
-                        .requestMatchers("/css/**", "/favicon.ico").permitAll()
+                        .requestMatchers("/css/**", "/js/**", "/favicon.ico").permitAll()
                         // Everything else — including unknown paths — demands login first.
                         .anyRequest().authenticated())
                 .oauth2Login(login -> login
@@ -58,6 +59,12 @@ class ConsoleSecurityConfig {
                         // visible right here.
                         .userInfoEndpoint(userInfo ->
                                 userInfo.userAuthoritiesMapper(new ConsoleRealmRoleMapper())))
+                // M8b brought the console's first JavaScript; the CSP makes one future
+                // escaping slip a blocked resource instead of an XSS. Everything is
+                // self-hosted by design (ADR-0007 vendors htmx), so 'self' costs nothing.
+                .headers(headers -> headers.contentSecurityPolicy(csp -> csp.policyDirectives(
+                        "default-src 'self'; script-src 'self'; style-src 'self'; "
+                                + "img-src 'self'; frame-ancestors 'none'")))
                 .logout(logout -> logout.logoutSuccessHandler(oidcLogout));
         return http.build();
     }

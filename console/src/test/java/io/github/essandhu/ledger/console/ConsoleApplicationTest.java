@@ -42,6 +42,24 @@ class ConsoleApplicationTest {
     }
 
     @Test
+    @DisplayName("the scripts are anonymous — htmx and the time localizer survive the bounce too")
+    void scripts_are_anonymous() {
+        assertThat(mvc.get().uri("/js/htmx.min.js")).hasStatusOk();
+        assertThat(mvc.get().uri("/js/app.js")).hasStatusOk();
+    }
+
+    @Test
+    @DisplayName("every page carries the self-only CSP — the console's first JS shipped with a leash")
+    void csp_header_present() {
+        assertThat(mvc.get().uri("/css/console.css"))
+                .hasStatusOk()
+                .containsHeader("Content-Security-Policy");
+        assertThat(mvc.get().uri("/css/console.css").exchange()
+                .getResponse().getHeader("Content-Security-Policy"))
+                .contains("default-src 'self'", "frame-ancestors 'none'");
+    }
+
+    @Test
     @DisplayName("unknown paths demand login before they can 404 — the backstop is authentication")
     void unknown_paths_require_login_first() {
         assertThat(mvc.get().uri("/does-not-exist"))

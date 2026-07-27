@@ -21,6 +21,8 @@ pitest-core = "1.25.8"           # PIT core (plugin default is 1.22.1; 1.25.x is
 pitest-junit5 = "1.2.3"          # NO released version supports JUnit Platform 6 (pitest-junit5-plugin#113,
                                  # fix PR #114 closed unverified) — build.gradle.kts forces Platform 6
                                  # artifacts onto PIT's tool classpath; see the pitest block's comment
+jsoup = "1.22.2"                 # console fragment assertions (M8b) — NOT in the Boot BOM
+                                 # (authoritative source: repo1 maven-metadata, not the stale search index)
 
 [libraries]
 springdoc-openapi-webmvc-ui = { module = "org.springdoc:springdoc-openapi-starter-webmvc-ui", version.ref = "springdoc" }
@@ -31,6 +33,7 @@ pitest-junit5-anchor = { module = "org.pitest:pitest-junit5-plugin", version.ref
 archunit-core = { module = "com.tngtech.archunit:archunit", version.ref = "archunit" }
 java-uuid-generator = { module = "com.fasterxml.uuid:java-uuid-generator", version.ref = "java-uuid-generator" }
 postgresql-jdbc = { module = "org.postgresql:postgresql", version.ref = "postgresql-jdbc" }
+jsoup = { module = "org.jsoup:jsoup", version.ref = "jsoup" }
 
 [plugins]
 spring-boot = { id = "org.springframework.boot", version.ref = "spring-boot" }

@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments :: head('Ledger console — accounts')}"></head>
+<body>
+<header th:replace="~{fragments :: topbar('accounts')}"></header>
+
+<main class="wide">
+    <section class="panel" aria-labelledby="accounts-heading">
+        <header class="panel-head">
+            <h1 id="accounts-heading">Accounts</h1>
+            <!-- The filters ARE the API's own query params, forwarded verbatim. -->
+            <form class="filters" method="get" th:action="@{/accounts}">
+                <label>Type
+                    <select name="type">
+                        <option value="">any</option>
+                        <option th:each="t : ${types}" th:value="${t}" th:text="${t}"
+                                th:selected="${t == typeFilter}">ASSET</option>
+                    </select>
+                </label>
+                <label>Status
+                    <select name="status">
+                        <option value="">any</option>
+                        <option th:each="s : ${statuses}" th:value="${s}" th:text="${s}"
+                                th:selected="${s == statusFilter}">ACTIVE</option>
+                    </select>
+                </label>
+                <button type="submit">Filter</button>
+            </form>
+        </header>
+
+        <div class="table-scroll">
+            <table class="ruled">
+                <thead>
+                <tr>
+                    <th>Name</th><th>Type</th><th>Status</th><th>Currency</th>
+                    <th>Negative OK</th><th>Created</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr th:each="row : ${rows}">
+                    <td><a class="mono" th:href="@{/accounts/{id}(id=${row.id})}"
+                           th:text="${row.name}">demo-operating</a></td>
+                    <td><span class="type-tag" th:text="${row.type}">LIABILITY</span></td>
+                    <td><span th:class="|status-badge status-${row.statusCss}|"
+                              th:text="${row.status}">ACTIVE</span></td>
+                    <td class="mono" th:text="${row.currency}">EUR</td>
+                    <td th:text="${row.allowNegative} ? 'yes' : 'no'">no</td>
+                    <td><time th:attr="datetime=${row.createdAt}"
+                              th:text="${row.createdAt}">2026-07-27T12:00:00Z</time></td>
+                </tr>
+                <tr th:if="${#lists.isEmpty(rows)}">
+                    <td colspan="6" class="empty">No accounts match this filter — clear it, or
+                        create accounts through the API (the console is read-only).</td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <footer class="pager">
+            <a th:if="${hasPrevious}"
+               th:href="@{/accounts(type=${typeFilter}, status=${statusFilter}, page=${page - 1})}">← Previous</a>
+            <span class="pager-status"
+                  th:text="|Page ${page + 1} of ${totalPages == 0 ? 1 : totalPages} · ${totalElements} accounts|">Page 1 of 1 · 3 accounts</span>
+            <a th:if="${hasNext}"
+               th:href="@{/accounts(type=${typeFilter}, status=${statusFilter}, page=${page + 1})}">Next →</a>
+        </footer>
+    </section>
+</main>
+
+<th:block th:replace="~{fragments :: scripts}"></th:block>
+</body>
+</html>
