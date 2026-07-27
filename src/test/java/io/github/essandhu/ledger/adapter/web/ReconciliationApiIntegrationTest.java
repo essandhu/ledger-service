@@ -25,7 +25,7 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
  * ({@code ReconciliationJobIntegrationTest}); this class pins the edges.
  */
 @LedgerIntegrationTest
-@DisplayName("M6 API edges: reconciliation-run 404s and paging validation")
+@DisplayName("M6/M8c API edges: reconciliation-run 404s and paging validation")
 class ReconciliationApiIntegrationTest {
 
     @Autowired
@@ -82,6 +82,22 @@ class ReconciliationApiIntegrationTest {
                 .hasStatus(HttpStatus.BAD_REQUEST);
         assertThat(mvc.get().uri(findings + "?page=-1").with(reader()))
                 .hasStatus(HttpStatus.BAD_REQUEST);
+    }
+
+    @Test
+    @DisplayName("run-listing paging bounds are enforced at the web boundary too — bare 400s (M8c)")
+    void run_listing_paging_bounds_are_enforced() {
+        String runs = "/api/v1/reconciliation-runs";
+        assertThat(mvc.get().uri(runs + "?size=0").with(reader()))
+                .hasStatus(HttpStatus.BAD_REQUEST);
+        assertThat(mvc.get().uri(runs + "?size=101").with(reader()))
+                .hasStatus(HttpStatus.BAD_REQUEST);
+        assertThat(mvc.get().uri(runs + "?page=-1").with(reader()))
+                .hasStatus(HttpStatus.BAD_REQUEST);
+        // The defaults bind: no params at all is a valid page-0 read of size 20.
+        assertThat(mvc.get().uri(runs).with(reader()))
+                .hasStatusOk()
+                .bodyJson().extractingPath("$.size").isEqualTo(20);
     }
 
     private static RequestPostProcessor reader() {

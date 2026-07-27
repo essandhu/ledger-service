@@ -8,10 +8,12 @@ import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.domain.Sort.Direction;
 import org.springframework.stereotype.Component;
 
 import io.github.essandhu.ledger.application.port.in.PageSpec;
 import io.github.essandhu.ledger.application.port.in.ReconciliationFindingsPage;
+import io.github.essandhu.ledger.application.port.in.ReconciliationRunPage;
 import io.github.essandhu.ledger.application.port.out.BalanceComparison;
 import io.github.essandhu.ledger.application.port.out.ReconciliationFinding;
 import io.github.essandhu.ledger.application.port.out.ReconciliationRepository;
@@ -104,6 +106,17 @@ class ReconciliationPersistenceAdapter implements ReconciliationRepository {
     public IntegrityCounts integrityCounts() {
         return new IntegrityCounts(runs.countCurrencyMismatches(),
                 runs.countPostedAtMismatches(), runs.countUnbalancedCurrencies());
+    }
+
+    @Override
+    public ReconciliationRunPage runs(PageSpec page) {
+        // Descending id (M8c): the run history reads from its newest end, and a backwards scan
+        // of the primary key needs no sort and no index V5 does not already have.
+        Page<ReconciliationRunJpaEntity> result =
+                runs.findAll(PageRequest.of(page.page(), page.size(), Sort.by(Direction.DESC, "id")));
+        return new ReconciliationRunPage(
+                result.getContent().stream().map(ReconciliationRunJpaEntity::toDomain).toList(),
+                page.page(), page.size(), result.getTotalElements());
     }
 
     @Override

@@ -18,13 +18,15 @@ import org.springframework.web.bind.annotation.RestController;
 
 import io.github.essandhu.ledger.application.port.in.GetReconciliationRunQuery;
 import io.github.essandhu.ledger.application.port.in.ListReconciliationFindingsQuery;
+import io.github.essandhu.ledger.application.port.in.ListReconciliationRunsQuery;
 import io.github.essandhu.ledger.application.port.in.PageSpec;
 import io.github.essandhu.ledger.application.port.in.ReconcileBalancesUseCase;
 import io.github.essandhu.ledger.application.port.in.ReconcileBalancesUseCase.TriggerReconciliationCommand;
 import io.github.essandhu.ledger.application.port.out.ReconciliationRun;
 
 /**
- * The reconciliation surface (M6). Thin: DTO ↔ command mapping only. POST runs the
+ * The reconciliation surface (M6; the run-history listing added at M8c for the console).
+ * Thin: DTO ↔ command mapping only. POST runs the
  * sweep synchronously and answers 201 with the run RESOURCE — whatever its verdict, including
  * FAILED: the run row exists and is the honest answer, and "the sweep could not finish" is the
  * resource's state, not a transport error. No {@code Idempotency-Key}: not a money mover;
@@ -37,12 +39,15 @@ class ReconciliationController {
 
     private final ReconcileBalancesUseCase reconcile;
     private final GetReconciliationRunQuery getRun;
+    private final ListReconciliationRunsQuery listRuns;
     private final ListReconciliationFindingsQuery listFindings;
 
     ReconciliationController(ReconcileBalancesUseCase reconcile,
-            GetReconciliationRunQuery getRun, ListReconciliationFindingsQuery listFindings) {
+            GetReconciliationRunQuery getRun, ListReconciliationRunsQuery listRuns,
+            ListReconciliationFindingsQuery listFindings) {
         this.reconcile = reconcile;
         this.getRun = getRun;
+        this.listRuns = listRuns;
         this.listFindings = listFindings;
     }
 
@@ -59,6 +64,14 @@ class ReconciliationController {
     @GetMapping("/{id}")
     ReconciliationRunResponse byId(@PathVariable UUID id) {
         return ReconciliationRunResponse.from(getRun.run(id));
+    }
+
+    /** The run history, newest first (M8c) — the console's run-history page reads this. */
+    @GetMapping
+    ReconciliationRunsPageResponse list(
+            @RequestParam(defaultValue = "0") @Min(0) int page,
+            @RequestParam(defaultValue = "20") @Min(1) @Max(PageSpec.MAX_SIZE) int size) {
+        return ReconciliationRunsPageResponse.from(listRuns.runs(new PageSpec(page, size)));
     }
 
     @GetMapping("/{id}/findings")

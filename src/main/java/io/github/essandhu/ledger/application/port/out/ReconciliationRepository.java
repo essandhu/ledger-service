@@ -7,6 +7,7 @@ import java.util.UUID;
 
 import io.github.essandhu.ledger.application.port.in.PageSpec;
 import io.github.essandhu.ledger.application.port.in.ReconciliationFindingsPage;
+import io.github.essandhu.ledger.application.port.in.ReconciliationRunPage;
 
 /**
  * Driven port for the reconciliation subsystem (ADR-0002, I15): the per-account comparison
@@ -48,6 +49,14 @@ public interface ReconciliationRepository {
     void failRun(UUID runId, Instant finishedAt);
 
     Optional<ReconciliationRun> findRun(UUID runId);
+
+    /**
+     * One page of the run history, newest first (M8c). Descending id, not descending
+     * {@code started_at}: UUIDv7 makes them the same order, and V5 gives the table no index
+     * beyond its primary key — a backwards scan of that key serves this with no sort node and
+     * no new index to justify.
+     */
+    ReconciliationRunPage runs(PageSpec page);
 
     /** Appends one chunk's findings; write-once rows (V5 grants: no UPDATE, no DELETE). */
     void insertFindings(List<ReconciliationFinding> findings);

@@ -18,6 +18,8 @@
     <nav class="topnav">
         <a th:href="@{/accounts}" href="accounts.html"
            th:classappend="${active == 'accounts'} ? 'active'">Accounts</a>
+        <a th:href="@{/reconciliation}" href="reconciliation.html"
+           th:classappend="${active == 'reconciliation'} ? 'active'">Reconciliation</a>
         <a th:href="@{/whoami}" href="whoami.html"
            th:classappend="${active == 'whoami'} ? 'active'">Whoami</a>
     </nav>

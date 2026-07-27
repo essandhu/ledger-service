@@ -22,6 +22,14 @@ import org.springframework.security.web.SecurityFilterChain;
  * <p>Defining this chain makes Boot's default OAuth2 login chain back off
  * ({@code @ConditionalOnDefaultWebSecurity}), so {@code oauth2Login} must be — and is —
  * configured explicitly; forgetting it yields 403s, not an error.
+ *
+ * <p>There are deliberately NO role rules here, not even for M8c's sweep trigger (the one
+ * write the console offers). A {@code hasRole("LEDGER_ADMIN")} matcher on that path was
+ * considered and rejected: it would fork the role matrix into a second place that can drift
+ * from the API's, which is the authority — every console request rides the user's own token,
+ * so the ledger already answers 403 and {@code ConsoleErrorAdvice} renders that honestly. The
+ * console's job is to not OFFER what will be refused ({@code sec:authorize} hides the button),
+ * not to re-adjudicate it. {@code ReconciliationPageTest} pins both halves.
  */
 @Configuration(proxyBeanMethods = false)
 class ConsoleSecurityConfig {

@@ -14,8 +14,10 @@ build/
 docs/PLAN.md
 docs/TEST-STRATEGY.md
 
-# Smoke-probe artifact (CI writes it in the runner workspace only)
+# Smoke-probe and console-e2e artifacts (CI writes them in the runner workspace only)
 app.log
+console.log
+console.pid
 
 # Playwright install for the README screenshot capture (docs/media/README.md); the lockfile
 # beside it IS committed, so a regenerated screenshot comes from the same Playwright.

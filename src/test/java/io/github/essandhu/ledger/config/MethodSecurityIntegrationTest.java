@@ -22,6 +22,8 @@ import io.github.essandhu.ledger.application.port.in.GetJournalEntryQuery;
 import io.github.essandhu.ledger.application.port.in.PostJournalEntryUseCase;
 import io.github.essandhu.ledger.application.port.in.PostJournalEntryUseCase.PostEntryCommand;
 import io.github.essandhu.ledger.application.port.in.GetStatementQuery;
+import io.github.essandhu.ledger.application.port.in.ListReconciliationRunsQuery;
+import io.github.essandhu.ledger.application.port.in.PageSpec;
 import io.github.essandhu.ledger.application.port.in.ReverseEntryUseCase;
 import io.github.essandhu.ledger.application.port.in.ReverseEntryUseCase.ReverseCommand;
 import io.github.essandhu.ledger.application.port.in.StatementFilter;
@@ -78,6 +80,9 @@ class MethodSecurityIntegrationTest {
 
     @Autowired
     private GetStatementQuery getStatement;
+
+    @Autowired
+    private ListReconciliationRunsQuery listRuns;
 
     @AfterEach
     void clearSecurityContext() {
@@ -187,6 +192,20 @@ class MethodSecurityIntegrationTest {
         assertThatThrownBy(() -> getStatement.statement(unknown, StatementFilter.unbounded(),
                 StatementSpec.firstPage(1)))
                 .isInstanceOf(AccountNotFound.class);
+    }
+
+    @Test
+    @DisplayName("M8c run listing: denied without the read role, and with it returns a real page")
+    void run_listing_denies_wrong_roles_and_serves_the_right_one() {
+        PageSpec firstPage = new PageSpec(0, 1);
+        authenticateWithRoles("LEDGER_WRITE", "LEDGER_ADMIN"); // every role EXCEPT the read role
+        assertThatThrownBy(() -> listRuns.runs(firstPage))
+                .isInstanceOf(AccessDeniedException.class);
+
+        // No 404-shaped miss exists for a collection, so the right-role cell asserts the page
+        // itself: reaching a page at all proves the method body executed.
+        authenticateWithRoles("LEDGER_READ");
+        assertThat(listRuns.runs(firstPage).size()).isEqualTo(1);
     }
 
     /** A balanced two-leg command on accounts that do not exist — valid past every pure check. */

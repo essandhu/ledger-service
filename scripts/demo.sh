@@ -7,6 +7,7 @@
 #
 #   scripts/demo.sh                  # fresh stack (down -v first), leaves it running
 #   scripts/demo.sh --observability  # same, plus Prometheus + Grafana (ADR-0006)
+#   scripts/demo.sh --console        # same, plus how to open the read-only console (ADR-0007)
 #
 # Requirements: Docker (compose v2) and jq. Bash-portable: no GNU-only constructs — status
 # codes and bodies are captured separately instead of `head -n -1` (which breaks on macOS).
@@ -22,7 +23,17 @@ trap 'rm -rf "$DEMO_TMP"' EXIT
 BASE=http://localhost:8080
 KC=http://localhost:8081
 OBSERVABILITY=false
-[ "${1:-}" = "--observability" ] && OBSERVABILITY=true
+CONSOLE=false
+# A loop, not two positional tests: `[ "${1:-}" = … ]` per flag would make the flags mutually
+# exclusive by position, silently dropping the second one.
+while [ $# -gt 0 ]; do
+  case $1 in
+    --observability) OBSERVABILITY=true ;;
+    --console)       CONSOLE=true ;;
+    *)               printf 'unknown flag: %s\n' "$1" >&2; exit 1 ;;
+  esac
+  shift
+done
 
 bold=$(printf '\033[1m'); green=$(printf '\033[32m'); red=$(printf '\033[31m'); dim=$(printf '\033[2m'); reset=$(printf '\033[0m')
 [ -t 1 ] || { bold=""; green=""; red=""; dim=""; reset=""; }
@@ -195,6 +206,14 @@ jq -e --arg a "$SRC" '.content[0].accountId == $a and .content[0].delta == 7' <<
   || fail "the finding must name the account and the exact delta 7"
 ok "finding: account $(jq -r '.content[0].accountId' <<<"$BODY"), snapshot $(jq -r '.content[0].snapshotBalance' <<<"$BODY") vs computed $(jq -r '.content[0].computedBalance' <<<"$BODY"), delta 7"
 
+# M8c: the run history has an HTTP surface now — the console's run-history page reads exactly
+# this. Newest first, so the DRIFT sweep just triggered is page 0's first element.
+req GET "$BASE/api/v1/reconciliation-runs?size=5" "$RO"
+expect 200 "list the run history as READ (M8c)"
+jq -e --arg r "$RUN" '.content[0].id == $r and .totalElements >= 2' <<<"$BODY" >/dev/null \
+  || fail "the history must be newest-first, with the DRIFT run at the top"
+ok "history: $(jq -r '.totalElements' <<<"$BODY") runs, newest first — $(jq -r '.content[0].status' <<<"$BODY") on top"
+
 step "M7 — the gauges need LEDGER_METRICS (ADR-0006), and they fired"
 req GET "$BASE/actuator/prometheus" "$RO"
 expect 403 "READ token may not scrape metrics (dedicated role, no hierarchy)"
@@ -220,6 +239,19 @@ echo "    Keycloak     $KC       (admin/admin)"
 if $OBSERVABILITY; then
   echo "    Prometheus   http://localhost:9090"
   echo "    Grafana      http://localhost:3000  (anonymous viewer; dashboard: Ledger Service)"
+fi
+if $CONSOLE; then
+  # The console is a HOST process in this phase, not a compose service (ADR-0007: Boot's OAuth2
+  # client does eager issuer discovery at startup, so an in-container localhost:8081 would be
+  # the container's own loopback). The stack above is already up, which is the precondition.
+  echo "  Read-only console (ADR-0007) — start it, then open it:"
+  echo "    Start        ./gradlew :console:bootRun"
+  echo "    Console      http://localhost:8090"
+  echo "    Sign in as   ops/ops        (CONSOLE_OPS → READ + ADMIN + METRICS)"
+  echo "                 viewer/viewer  (READ only — no trigger button)"
+  echo "  Then: Reconciliation → open the DRIFT run. The finding is still there, with delta 7:"
+  echo "  the repair above fixed the snapshot, but findings are write-once audit artifacts and"
+  echo "  the run history is append-only — a sweep's verdict is never edited away."
 fi
 # Profile-aware unconditionally: harmless on a plain run, and it cleans up leftovers from
 # any earlier --observability run.

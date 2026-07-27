@@ -6,12 +6,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import io.github.essandhu.ledger.application.port.in.PageSpec;
+import io.github.essandhu.ledger.application.port.in.ReconciliationRunPage;
 import io.github.essandhu.ledger.application.port.out.AccountRepository;
 import io.github.essandhu.ledger.application.port.out.BalanceComparison;
 import io.github.essandhu.ledger.application.port.out.BalanceRepository;
@@ -32,7 +35,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * to verdict over HTTP — is {@code ReconciliationJobIntegrationTest}'s subject; this class pins
  * what only the adapter can promise: the RUNNING guard turns any second (or unopened) finish
  * into a LOUD zero-row failure, a failed run's result columns stay NULL and read back as EMPTY
- * results, and the strictly-greater keyset resume can neither skip nor repeat an account.
+ * results, the strictly-greater keyset resume can neither skip nor repeat an account, and
+ * (M8c) the run history pages newest first with a whole-table {@code totalElements}.
  *
  * <p>Shared-context discipline: run rows are additive-safe audit history under fresh random
  * ids; the scan fixtures are dedicated zero-seeded accounts (account + zero snapshot in one
@@ -185,6 +189,46 @@ class ReconciliationPersistenceAdapterIntegrationTest {
             assertThat(row.computedCount()).isZero();
             assertThat(row.drifted()).isFalse();
         }
+    }
+
+    @Test
+    @DisplayName("the run history pages NEWEST first, and totalElements counts the whole table (M8c)")
+    void run_history_pages_newest_first() {
+        // Ids in the maximum bytewise region, so these three sit at the head of the DESCENDING
+        // order no matter what other tests left behind: every other run id in the suite comes
+        // from UUID.randomUUID() or the app's UUIDv7 generator, neither of which produces an
+        // all-ones leading word.
+        List<UUID> chronological = List.of(
+                UUID.fromString("ffffffff-ffff-7000-8000-000000000001"),
+                UUID.fromString("ffffffff-ffff-7000-8000-000000000002"),
+                UUID.fromString("ffffffff-ffff-7000-8000-000000000003"));
+        chronological.forEach(id -> transactionTemplate.executeWithoutResult(tx ->
+                reconciliation.insertRun(id, T0, "recon-history-probe")));
+
+        ReconciliationRunPage first = transactionTemplate.execute(
+                tx -> reconciliation.runs(new PageSpec(0, 3)));
+        assertThat(first.content()).extracting(ReconciliationRun::id)
+                .as("page 0 is the LATEST sweeps — an operational log is read from its new end")
+                .containsExactly(chronological.get(2), chronological.get(1),
+                        chronological.get(0));
+
+        // The independent COUNT makes totalElements a whole-table fact, not a fixture fact
+        // (the keyset-walk precedent above); tests run sequentially, so the count is stable.
+        Long totalRows = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM reconciliation_run", Long.class);
+        assertThat(first.totalElements()).isEqualTo(totalRows);
+
+        // Whatever else the table holds, a page is strictly descending and the next page
+        // continues below the first — the ordering contract, independent of the fixtures.
+        ReconciliationRunPage second = transactionTemplate.execute(
+                tx -> reconciliation.runs(new PageSpec(1, 3)));
+        assertThat(second.content()).extracting(ReconciliationRun::id)
+                .doesNotContainAnyElementsOf(chronological);
+        List<UUID> walked = Stream.concat(first.content().stream(), second.content().stream())
+                .map(ReconciliationRun::id)
+                .toList();
+        assertThat(walked).isSortedAccordingTo(
+                BalanceRepository.UUID_BYTEWISE_ORDER.reversed());
     }
 
     /**

@@ -47,11 +47,76 @@ dependencies {
     // through the SAME configurer path production uses, so bind-before-build ordering is moot.
     testImplementation("org.springframework.boot:spring-boot-restclient-test")
     testImplementation(libs.jsoup)
+    // M8c e2e lane: the plain Playwright library, no JUnit-Platform coupling (ADR-0007) —
+    // its @UsePlaywright extension is experimental and upstream-tested only on Jupiter 5.14.
+    testImplementation(libs.playwright)
 }
 
 tasks.test {
-    useJUnitPlatform()
+    useJUnitPlatform {
+        // The e2e lane is tag-filtered OUT of the default lane, and this exclusion is not
+        // optional: an @Tag("e2e") class reached by `:console:test` would launch a browser at
+        // a compose stack and a host console that the "Console build" job does not have.
+        excludeTags("e2e")
+    }
     finalizedBy(tasks.jacocoTestReport)
+}
+
+// M8c: the browser lane (ADR-0007). Deliberately NOT wired into `check` — the ONE place this
+// diverges from the root project's concurrencyTest precedent. concurrencyTest can join `check`
+// because Testcontainers gives it its own infrastructure; this lane needs an externally started
+// compose stack PLUS a host process on 8090, so wiring it in would break `./gradlew build` and
+// the required "Console build" job. CI runs it as its own job.
+tasks.register<Test>("e2eTest") {
+    description = "Runs the M8c console e2e suite in a real browser (tag: e2e). " +
+        "Needs the compose stack up and the console running on 8090."
+    group = "verification"
+    useJUnitPlatform {
+        includeTags("e2e")
+    }
+    testClassesDirs = sourceSets.test.get().output.classesDirs
+    classpath = sourceSets.test.get().runtimeClasspath
+    // Where the console is, and whether to watch it work — forwarded only when set, so an
+    // ordinary run takes the defaults and the task's inputs (and cacheability) are unchanged.
+    // Deliberately NO credential knobs: each cell is ABOUT its user's role (ops has the
+    // trigger, viewer does not), so a configurable username would make the assertions
+    // meaningless rather than flexible.
+    listOf("ledger.e2e.console-base-url", "ledger.e2e.headed").forEach { key ->
+        providers.systemProperty(key).orNull?.let { value -> systemProperty(key, value) }
+    }
+    // Gradle-owned absolute path: a working-directory-relative one would land wherever the
+    // forked JVM happens to start, and CI uploads exactly this directory.
+    systemProperty("ledger.e2e.screenshots",
+        layout.buildDirectory.dir("reports/playwright").get().asFile.absolutePath)
+    // Playwright's Java bindings otherwise run their own `install` on Playwright.create(),
+    // which fetches EVERY browser — chromium, firefox and webkit — even though this lane drives
+    // only chromium. installPlaywrightBrowsers is the one place that download happens, so a
+    // missing binary is a loud launch failure pointing at a skipped step, not a silent 200 MB.
+    environment("PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD", "1")
+    // Same reasoning as concurrencyTest: this lane's verdict depends on state Gradle cannot see
+    // (a live stack), so an UP-TO-DATE or FROM-CACHE answer would be a vacuous green.
+    outputs.upToDateWhen { false }
+    outputs.doNotCacheIf("the e2e lane's verdict depends on a live stack Gradle cannot see") { true }
+    mustRunAfter(tasks.test)
+    // No JaCoCo: the app under test is a SEPARATE JVM, so the agent here would record the
+    // driver's own coverage — and a stray e2eTest.exec would be an unconsumed artifact next to
+    // the 0.70 gate, which stays fed by `test` alone.
+    configure<JacocoTaskExtension> {
+        isEnabled = false
+    }
+}
+
+// Downloads the chromium build Playwright's Java bindings expect, via Playwright's own CLI.
+// Deliberately not cacheable and not up-to-date-checkable: it mutates a machine-global
+// directory (~/.cache/ms-playwright) and shells out to the system package manager for
+// chromium's shared libraries, neither of which Gradle can model. Playwright's own docs say
+// not to cache the browser binaries, so CI does not either.
+tasks.register<JavaExec>("installPlaywrightBrowsers") {
+    description = "Installs the chromium build the e2e lane drives (Playwright's own CLI)."
+    group = "verification"
+    mainClass = "com.microsoft.playwright.CLI"
+    classpath = sourceSets.test.get().runtimeClasspath
+    args("install", "--with-deps", "chromium")
 }
 
 jacoco {

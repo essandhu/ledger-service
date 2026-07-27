@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head th:replace="~{fragments :: head('Ledger console — reconciliation')}"></head>
+<body>
+<header th:replace="~{fragments :: topbar('reconciliation')}"></header>
+
+<main class="wide">
+    <section class="panel" aria-labelledby="runs-heading">
+        <header class="panel-head">
+            <h1 id="runs-heading">Reconciliation runs</h1>
+            <!-- The ops-only action, and the console's ONLY write. sec:authorize hides it from
+                 a viewer; the API is what actually refuses one (a hand-rolled POST comes back
+                 403 into the slot below) — one role matrix, not two. -->
+            <form class="trigger-form" method="post" th:action="@{/reconciliation/runs}"
+                  sec:authorize="hasRole('LEDGER_ADMIN')"
+                  th:attr="hx-post=@{/reconciliation/runs}"
+                  hx-target="#trigger-problem" hx-swap="innerHTML"
+                  hx-confirm="Run a reconciliation sweep now? It reads every account and appends a run record — no money moves.">
+                <button class="trigger" type="submit">Run reconciliation now</button>
+            </form>
+        </header>
+        <!-- caption, not panel-note: panel-note is a flex child of panel-head (a short label
+             beside the heading), and this is body-level prose that needs the panel's padding. -->
+        <p class="caption">Newest first. Each sweep recomputes every account's balance and
+            posting count from its postings and compares them to the stored snapshot — a
+            <span class="mono">DRIFT</span> verdict means the two disagreed, and the run's
+            findings say by how much. Findings are flagged, never repaired.</p>
+        <!-- Swap target for a refused or failed trigger; empty until then. -->
+        <div id="trigger-problem" class="trigger-problem"></div>
+
+        <div class="table-scroll">
+            <table class="ruled">
+                <thead>
+                <tr>
+                    <th>Started</th><th>Verdict</th><th>Triggered by</th>
+                    <th class="num">Accounts</th><th class="num">Drifted</th><th>Finished</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr th:each="row : ${rows}">
+                    <td><a th:href="@{/reconciliation/runs/{id}(id=${row.run.id})}">
+                        <time th:attr="datetime=${row.run.startedAt}"
+                              th:text="${row.run.startedAt}">2026-07-27T12:00:00Z</time></a></td>
+                    <td><span th:class="|status-badge status-${row.statusCss}|"
+                              th:text="${row.run.status}">CLEAN</span></td>
+                    <td class="mono" th:text="${row.run.triggeredBy}">scheduler</td>
+                    <!-- Absent, not zero: a RUNNING or FAILED run counted nothing it can report. -->
+                    <td class="num mono"
+                        th:text="${row.run.accountsChecked} != null ? ${row.run.accountsChecked} : '—'">3</td>
+                    <td class="num mono"
+                        th:text="${row.run.driftCount} != null ? ${row.run.driftCount} : '—'">0</td>
+                    <td><time th:if="${row.run.finishedAt}"
+                              th:attr="datetime=${row.run.finishedAt}"
+                              th:text="${row.run.finishedAt}">2026-07-27T12:00:01Z</time>
+                        <span th:unless="${row.run.finishedAt}" class="pager-status">still running</span></td>
+                </tr>
+                <tr th:if="${#lists.isEmpty(rows)}">
+                    <td colspan="6" class="empty">No sweeps recorded yet — trigger one, or wait
+                        for the schedule (disabled by default in this stack).</td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <footer class="pager">
+            <a th:if="${hasPrevious}" th:href="@{/reconciliation(page=${page - 1})}">← Newer</a>
+            <span class="pager-status"
+                  th:text="|Page ${page + 1} of ${totalPages == 0 ? 1 : totalPages} · ${totalElements} runs|">Page 1 of 1 · 2 runs</span>
+            <a th:if="${hasNext}" th:href="@{/reconciliation(page=${page + 1})}">Older →</a>
+        </footer>
+    </section>
+</main>
+
+<th:block th:replace="~{fragments :: scripts}"></th:block>
+</body>
+</html>

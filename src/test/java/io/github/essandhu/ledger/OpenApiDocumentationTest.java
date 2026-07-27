@@ -30,7 +30,7 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
  * defaults, and the artifact ships as generated.
  */
 @LedgerIntegrationTest
-@DisplayName("OpenAPI: the spec describes the M1+M2+M3+M4+M6 surface and becomes the CI artifact")
+@DisplayName("OpenAPI: the spec describes the M1+M2+M3+M4+M6+M8c surface and becomes the CI artifact")
 class OpenApiDocumentationTest {
 
     @Autowired
@@ -92,9 +92,9 @@ class OpenApiDocumentationTest {
                 JsonPath.read(spec, "$.paths['/api/v1/accounts/{id}/postings']");
         assertThat(postings).containsKeys("get");
 
-        // M6 reconciliation surface.
+        // M6 reconciliation surface, plus M8c's run-history listing on the collection.
         Map<String, Object> runs = JsonPath.read(spec, "$.paths['/api/v1/reconciliation-runs']");
-        assertThat(runs).containsKeys("post");
+        assertThat(runs).containsKeys("post", "get");
         Map<String, Object> runItem =
                 JsonPath.read(spec, "$.paths['/api/v1/reconciliation-runs/{id}']");
         assertThat(runItem).containsKeys("get");

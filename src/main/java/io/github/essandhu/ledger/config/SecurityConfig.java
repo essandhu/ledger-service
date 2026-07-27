@@ -79,13 +79,18 @@ class SecurityConfig {
                         // the READ role (composite roles in Keycloak are the convenience path).
                         // The findings path's extra segment needs its own matchers (the M3
                         // lesson above); HEAD listed explicitly, same reason as everywhere.
+                        // M8c added the collection GET (the run history the console lists) —
+                        // it is a READ like the others, and until then the backstop below
+                        // denied it, deliberately.
                         .requestMatchers(HttpMethod.POST, "/api/v1/reconciliation-runs")
                         .hasRole("LEDGER_ADMIN")
                         .requestMatchers(HttpMethod.GET,
+                                "/api/v1/reconciliation-runs",
                                 "/api/v1/reconciliation-runs/*",
                                 "/api/v1/reconciliation-runs/*/findings")
                         .hasRole("LEDGER_READ")
                         .requestMatchers(HttpMethod.HEAD,
+                                "/api/v1/reconciliation-runs",
                                 "/api/v1/reconciliation-runs/*",
                                 "/api/v1/reconciliation-runs/*/findings")
                         .hasRole("LEDGER_READ")
