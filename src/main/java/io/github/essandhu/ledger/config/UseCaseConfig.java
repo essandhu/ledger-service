@@ -15,11 +15,15 @@ import io.github.essandhu.ledger.application.port.out.BalanceRepository;
 import io.github.essandhu.ledger.application.port.out.IdGenerator;
 import io.github.essandhu.ledger.application.port.out.IdempotencyRepository;
 import io.github.essandhu.ledger.application.port.out.JournalRepository;
+import io.github.essandhu.ledger.application.port.out.ReconciliationRepository;
+import io.github.essandhu.ledger.application.port.out.ReconciliationTrigger;
 import io.github.essandhu.ledger.application.port.out.WriteResponseRenderer;
 import io.github.essandhu.ledger.application.service.AccountService;
 import io.github.essandhu.ledger.application.service.BalanceService;
 import io.github.essandhu.ledger.application.service.IdempotencyPurgeService;
 import io.github.essandhu.ledger.application.service.PostingService;
+import io.github.essandhu.ledger.application.service.ReconciliationRunService;
+import io.github.essandhu.ledger.application.service.ReconciliationService;
 
 /**
  * Explicit wiring for the application core: services carry no stereotype annotations (the
@@ -60,6 +64,18 @@ class UseCaseConfig {
     BalanceService balanceService(AccountRepository accounts, BalanceRepository balances,
             JournalRepository journal) {
         return new BalanceService(accounts, balances, journal);
+    }
+
+    @Bean
+    ReconciliationRunService reconciliationRunService(ReconciliationRepository reconciliation,
+            Clock clock) {
+        return new ReconciliationRunService(reconciliation, clock);
+    }
+
+    @Bean
+    ReconciliationService reconciliationService(ReconciliationTrigger trigger,
+            ReconciliationRepository reconciliation, IdGenerator ids) {
+        return new ReconciliationService(trigger, reconciliation, ids);
     }
 
     /**

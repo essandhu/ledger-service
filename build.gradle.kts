@@ -44,6 +44,9 @@ dependencies {
     testImplementation("org.springframework.boot:spring-boot-testcontainers")
     testImplementation("org.testcontainers:testcontainers-postgresql")
     testImplementation("org.springframework.security:spring-security-test")
+    // M6: Batch's test factory for metadata instances (the listener unit tests build
+    // JobExecutions without a JobRepository). BOM-managed like the rest of spring-batch-*.
+    testImplementation("org.springframework.batch:spring-batch-test")
     testImplementation("org.awaitility:awaitility")
     testImplementation(libs.archunit.core)
 }

@@ -1,0 +1,145 @@
+-- I16 (M6): the Spring Batch metadata tables (PLAN §4.3), installed by Flyway so that ALL
+-- schema — including the framework's — is version-controlled and applied by the schema-owning
+-- role. The runtime role cannot create tables (V1: no CREATE on schema public), and
+-- spring.batch.jdbc.initialize-schema=never keeps Boot's own initializer out of the picture,
+-- so this migration is the only way these tables come to exist.
+--
+-- The DDL below is Spring Batch 6.0's org/springframework/batch/core/schema-postgresql.sql,
+-- transcribed VERBATIM (whitespace included) from the spring-batch-core jar pinned by the Boot
+-- BOM, so a checksum-stable copy lives under Flyway's I16 guarantee. Do not restyle it to house
+-- conventions — a future Batch upgrade must be able to diff this file against the shipped
+-- script and see only real schema changes. (Batch 6 renamed BATCH_JOB_SEQ to
+-- BATCH_JOB_INSTANCE_SEQ; this is the 6.x shape.)
+--
+-- ADRs in force: ADR-0002 (the reconciliation job whose executions these tables record).
+
+CREATE TABLE BATCH_JOB_INSTANCE (
+	JOB_INSTANCE_ID BIGINT NOT NULL PRIMARY KEY,
+	VERSION BIGINT,
+	JOB_NAME VARCHAR(100) NOT NULL,
+	JOB_KEY VARCHAR(32) NOT NULL,
+	constraint JOB_INST_UN unique (JOB_NAME, JOB_KEY)
+);
+
+CREATE TABLE BATCH_JOB_EXECUTION (
+	JOB_EXECUTION_ID BIGINT NOT NULL PRIMARY KEY,
+	VERSION BIGINT,
+	JOB_INSTANCE_ID BIGINT NOT NULL,
+	CREATE_TIME TIMESTAMP NOT NULL,
+	START_TIME TIMESTAMP DEFAULT NULL,
+	END_TIME TIMESTAMP DEFAULT NULL,
+	STATUS VARCHAR(10),
+	EXIT_CODE VARCHAR(2500),
+	EXIT_MESSAGE VARCHAR(2500),
+	LAST_UPDATED TIMESTAMP,
+	constraint JOB_INST_EXEC_FK foreign key (JOB_INSTANCE_ID)
+	references BATCH_JOB_INSTANCE(JOB_INSTANCE_ID)
+);
+
+CREATE TABLE BATCH_JOB_EXECUTION_PARAMS (
+	JOB_EXECUTION_ID BIGINT NOT NULL,
+	PARAMETER_NAME VARCHAR(100) NOT NULL,
+	PARAMETER_TYPE VARCHAR(100) NOT NULL,
+	PARAMETER_VALUE VARCHAR(2500),
+	IDENTIFYING CHAR(1) NOT NULL,
+	constraint JOB_EXEC_PARAMS_FK foreign key (JOB_EXECUTION_ID)
+	references BATCH_JOB_EXECUTION(JOB_EXECUTION_ID)
+);
+
+CREATE TABLE BATCH_STEP_EXECUTION (
+	STEP_EXECUTION_ID BIGINT NOT NULL PRIMARY KEY,
+	VERSION BIGINT NOT NULL,
+	STEP_NAME VARCHAR(100) NOT NULL,
+	JOB_EXECUTION_ID BIGINT NOT NULL,
+	CREATE_TIME TIMESTAMP NOT NULL,
+	START_TIME TIMESTAMP DEFAULT NULL,
+	END_TIME TIMESTAMP DEFAULT NULL,
+	STATUS VARCHAR(10),
+	COMMIT_COUNT BIGINT,
+	READ_COUNT BIGINT,
+	FILTER_COUNT BIGINT,
+	WRITE_COUNT BIGINT,
+	READ_SKIP_COUNT BIGINT,
+	WRITE_SKIP_COUNT BIGINT,
+	PROCESS_SKIP_COUNT BIGINT,
+	ROLLBACK_COUNT BIGINT,
+	EXIT_CODE VARCHAR(2500),
+	EXIT_MESSAGE VARCHAR(2500),
+	LAST_UPDATED TIMESTAMP,
+	constraint JOB_EXEC_STEP_FK foreign key (JOB_EXECUTION_ID)
+	references BATCH_JOB_EXECUTION(JOB_EXECUTION_ID)
+);
+
+CREATE TABLE BATCH_STEP_EXECUTION_CONTEXT (
+	STEP_EXECUTION_ID BIGINT NOT NULL PRIMARY KEY,
+	SHORT_CONTEXT VARCHAR(2500) NOT NULL,
+	SERIALIZED_CONTEXT TEXT,
+	constraint STEP_EXEC_CTX_FK foreign key (STEP_EXECUTION_ID)
+	references BATCH_STEP_EXECUTION(STEP_EXECUTION_ID)
+);
+
+CREATE TABLE BATCH_JOB_EXECUTION_CONTEXT (
+	JOB_EXECUTION_ID BIGINT NOT NULL PRIMARY KEY,
+	SHORT_CONTEXT VARCHAR(2500) NOT NULL,
+	SERIALIZED_CONTEXT TEXT,
+	constraint JOB_EXEC_CTX_FK foreign key (JOB_EXECUTION_ID)
+	references BATCH_JOB_EXECUTION(JOB_EXECUTION_ID)
+);
+
+CREATE SEQUENCE BATCH_STEP_EXECUTION_SEQ MAXVALUE 9223372036854775807 NO CYCLE;
+CREATE SEQUENCE BATCH_JOB_EXECUTION_SEQ MAXVALUE 9223372036854775807 NO CYCLE;
+CREATE SEQUENCE BATCH_JOB_INSTANCE_SEQ MAXVALUE 9223372036854775807 NO CYCLE;
+
+-- End of the verbatim transcription; house conventions resume.
+--
+-- Grants: the JobRepository runs as ledger_app and INSERTs and UPDATEs its metadata (execution
+-- status, contexts, the optimistic-lock VERSION columns) but never DELETEs at runtime — Batch's
+-- delete APIs (JobRepository.deleteJobInstance, the test-side removeJobExecutions) are
+-- deliberately unused here: metadata is run history, kept like reconciliation_run rows, and the
+-- integration tests use unique JobParameters instead of cleanup. nextval() on the sequences
+-- requires USAGE. Note the unquoted BATCH_* identifiers above fold to lowercase in PostgreSQL —
+-- hence the lowercase names from here on.
+GRANT SELECT, INSERT, UPDATE ON batch_job_instance, batch_job_execution,
+    batch_job_execution_params, batch_step_execution, batch_step_execution_context,
+    batch_job_execution_context TO ledger_app;
+GRANT USAGE ON SEQUENCE batch_job_instance_seq, batch_job_execution_seq,
+    batch_step_execution_seq TO ledger_app;
+
+-- Self-verification (the V1..V5 pattern, I16), adapted for a family of framework objects that
+-- share one grant set: one loop, but still an EXACT per-object check that names its offender —
+-- privilege creep on any single table or sequence fails the migration loudly.
+DO $$
+DECLARE
+    tbl text;
+    seq text;
+    granted text;
+BEGIN
+    FOREACH tbl IN ARRAY ARRAY['batch_job_instance', 'batch_job_execution',
+        'batch_job_execution_params', 'batch_step_execution', 'batch_step_execution_context',
+        'batch_job_execution_context']
+    LOOP
+        SELECT string_agg(a.privilege_type, ',' ORDER BY a.privilege_type)
+        INTO granted
+        FROM pg_class c, aclexplode(c.relacl) a
+        WHERE c.oid = ('public.' || tbl)::regclass
+          AND a.grantee = 'ledger_app'::regrole;
+        IF granted IS DISTINCT FROM 'INSERT,SELECT,UPDATE' THEN
+            RAISE EXCEPTION 'grant model not established: ledger_app grants on % are [%], expected [INSERT,SELECT,UPDATE]',
+                tbl, COALESCE(granted, 'none');
+        END IF;
+    END LOOP;
+    FOREACH seq IN ARRAY ARRAY['batch_job_instance_seq', 'batch_job_execution_seq',
+        'batch_step_execution_seq']
+    LOOP
+        SELECT string_agg(a.privilege_type, ',' ORDER BY a.privilege_type)
+        INTO granted
+        FROM pg_class c, aclexplode(c.relacl) a
+        WHERE c.oid = ('public.' || seq)::regclass
+          AND a.grantee = 'ledger_app'::regrole;
+        IF granted IS DISTINCT FROM 'USAGE' THEN
+            RAISE EXCEPTION 'grant model not established: ledger_app grants on % are [%], expected [USAGE]',
+                seq, COALESCE(granted, 'none');
+        END IF;
+    END LOOP;
+END
+$$;

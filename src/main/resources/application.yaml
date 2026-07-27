@@ -29,6 +29,11 @@ spring:
   batch:
     jdbc:
       initialize-schema: never   # BATCH_* tables arrive via a Flyway migration in M6
+    job:
+      # Boot would otherwise run every registered Job at application startup (and at every
+      # test context start). Reconciliation runs only when asked: the admin trigger endpoint,
+      # or the schedule below when enabled.
+      enabled: false
 
 ledger:
   idempotency:
@@ -40,6 +45,14 @@ ledger:
     # paces the sweep when enabled.
     ttl: P90D
     purge:
+      enabled: false
+
+  reconciliation:
+    # ADR-0002's standing safety net: the sweep itself is always available via the admin
+    # trigger endpoint; the SCHEDULE ships disabled (no scheduler machinery in the context
+    # until enabled — the purge precedent). schedule.interval (ISO-8601, default PT1H) paces
+    # the sweep when enabled. v1 assumes a single app instance for schedulers (adr/README).
+    schedule:
       enabled: false
 
 server:

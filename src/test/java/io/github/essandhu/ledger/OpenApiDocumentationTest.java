@@ -30,14 +30,14 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
  * defaults, and the artifact ships as generated.
  */
 @LedgerIntegrationTest
-@DisplayName("OpenAPI: the spec describes the M1+M2+M3+M4 surface and becomes the CI artifact")
+@DisplayName("OpenAPI: the spec describes the M1+M2+M3+M4+M6 surface and becomes the CI artifact")
 class OpenApiDocumentationTest {
 
     @Autowired
     private MockMvcTester mvc;
 
     @Test
-    @DisplayName("/v3/api-docs covers the account, posting, balance, and idempotency operations, secured with bearer JWT")
+    @DisplayName("/v3/api-docs covers the account, posting, balance, idempotency, and reconciliation operations, secured with bearer JWT")
     void api_docs_cover_the_account_surface_and_are_written_for_ci() throws Exception {
         MvcTestResult result = mvc.get().uri("/v3/api-docs").with(jwt()).exchange();
         assertThat(result).hasStatusOk();
@@ -79,6 +79,16 @@ class OpenApiDocumentationTest {
         Map<String, Object> postings =
                 JsonPath.read(spec, "$.paths['/api/v1/accounts/{id}/postings']");
         assertThat(postings).containsKeys("get");
+
+        // M6 reconciliation surface (PLAN §5).
+        Map<String, Object> runs = JsonPath.read(spec, "$.paths['/api/v1/reconciliation-runs']");
+        assertThat(runs).containsKeys("post");
+        Map<String, Object> runItem =
+                JsonPath.read(spec, "$.paths['/api/v1/reconciliation-runs/{id}']");
+        assertThat(runItem).containsKeys("get");
+        Map<String, Object> findings =
+                JsonPath.read(spec, "$.paths['/api/v1/reconciliation-runs/{id}/findings']");
+        assertThat(findings).containsKeys("get");
 
         Map<String, Object> schemes = JsonPath.read(spec, "$.components.securitySchemes");
         assertThat(schemes).containsKey("bearer-jwt");

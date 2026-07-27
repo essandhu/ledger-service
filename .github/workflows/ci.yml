@@ -435,6 +435,79 @@ jobs:
           fi
           echo "idempotency demo OK — replay 200 + Idempotency-Replayed + same entry id, tampered 422 conflict, missing header 400 (M4, ADR-0004)"
 
+          # --- M6 demo (PLAN §9, ADR-0002, I15): reconcile clean, induce drift via superuser
+          # SQL, reconcile again — the run flags it, the finding pins the delta, and the drift
+          # gauges fire on /actuator/prometheus. The scrape needs a token (prometheus shares
+          # port 8080 behind oauth — the accepted M1 deviation) and the exposition renames
+          # ledger.reconciliation.* to ledger_reconciliation_*.
+          run=$(curl -s -w '\n%{http_code}' -X POST -H "Authorization: Bearer $token" \
+            http://localhost:8080/api/v1/reconciliation-runs)
+          code=$(tail -n 1 <<< "$run")
+          body=$(head -n -1 <<< "$run")
+          if [ "$code" != "201" ]; then
+            echo "reconciliation trigger expected 201, got $code; response: $body"
+            exit 1
+          fi
+          verdict=$(jq -r '.status // empty' <<< "$body")
+          if [ "$verdict" != "CLEAN" ]; then
+            echo "pre-drift reconciliation expected CLEAN; response: $body"
+            exit 1
+          fi
+          prom=$(curl -s -H "Authorization: Bearer $token" http://localhost:8080/actuator/prometheus)
+          if ! grep -Eq '^ledger_reconciliation_drift_accounts(\{[^}]*\})? (0|0\.0)$' <<< "$prom"; then
+            echo "clean run must scrape ledger_reconciliation_drift_accounts 0"
+            grep '^ledger_reconciliation' <<< "$prom" || true
+            exit 1
+          fi
+          # Induce drift OUT OF BAND: superuser psql — deliberately not ledger_app, whose
+          # UPDATE being refused is itself asserted above (I3) — corrupts the source snapshot
+          # by +7 minor units (ADR-0002: out-of-band writes are the only way drift can exist).
+          docker compose exec -T postgres psql -U postgres -d ledger -v ON_ERROR_STOP=1 \
+            -c "UPDATE account_balance SET balance = balance + 7 WHERE account_id = '$src_id'"
+          drifted=$(curl -s -w '\n%{http_code}' -X POST -H "Authorization: Bearer $token" \
+            http://localhost:8080/api/v1/reconciliation-runs)
+          code=$(tail -n 1 <<< "$drifted")
+          body=$(head -n -1 <<< "$drifted")
+          if [ "$code" != "201" ]; then
+            echo "post-drift reconciliation trigger expected 201, got $code; response: $body"
+            exit 1
+          fi
+          summary=$(jq -r '[.status, (.driftCount | tostring)] | join("|")' <<< "$body")
+          if [ "$summary" != "DRIFT|1" ]; then
+            echo "post-drift reconciliation expected DRIFT|1, got: $summary; response: $body"
+            exit 1
+          fi
+          run_id=$(jq -r '.id // empty' <<< "$body")
+          findings=$(curl -s -H "Authorization: Bearer $ro_token" \
+            "http://localhost:8080/api/v1/reconciliation-runs/$run_id/findings")
+          finding_ok=$(jq --arg src "$src_id" \
+            '(.totalElements == 1)
+             and (.content[0].accountId == $src)
+             and (.content[0].delta == 7)
+             and (.content[0].snapshotBalance == 12352)
+             and (.content[0].computedBalance == 12345)' <<< "$findings")
+          if [ "$finding_ok" != "true" ]; then
+            echo "findings must pin the corrupted account with delta 7; response: $findings"
+            exit 1
+          fi
+          prom=$(curl -s -H "Authorization: Bearer $token" http://localhost:8080/actuator/prometheus)
+          if ! grep -Eq '^ledger_reconciliation_drift_accounts(\{[^}]*\})? (1|1\.0)$' <<< "$prom"; then
+            echo "drift gauge must read 1 after the drifted run"
+            grep '^ledger_reconciliation' <<< "$prom" || true
+            exit 1
+          fi
+          if ! grep -Eq '^ledger_reconciliation_drift_absolute(\{[^}]*\})? (7|7\.0)$' <<< "$prom"; then
+            echo "absolute drift gauge must read 7 after the drifted run"
+            grep '^ledger_reconciliation' <<< "$prom" || true
+            exit 1
+          fi
+          if ! grep -Eq '^ledger_reconciliation_runs_total\{[^}]*outcome="drift"[^}]*\} (1|1\.0)$' <<< "$prom"; then
+            echo "runs counter must show exactly one drift outcome"
+            grep '^ledger_reconciliation' <<< "$prom" || true
+            exit 1
+          fi
+          echo "reconciliation demo OK — CLEAN run + zero gauges, superuser +7 drift flagged: DRIFT run, finding delta 7, gauges fire (M6, ADR-0002, I15)"
+
           docker compose logs --no-color app > app.log
           grep -q "Started LedgerApplication" app.log
       - name: Dump logs on failure
