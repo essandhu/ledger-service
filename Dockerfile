@@ -4,8 +4,11 @@ FROM gradle:9.6.1-jdk21 AS build
 WORKDIR /workspace
 COPY settings.gradle.kts build.gradle.kts gradle.properties ./
 COPY gradle ./gradle
+# Settings evaluation needs every included project's build script to exist (M8 made the build
+# multi-project) — but only the ROOT bootJar is built here, hence the leading colon below.
+COPY console/build.gradle.kts ./console/build.gradle.kts
 COPY src ./src
-RUN gradle bootJar --no-daemon \
+RUN gradle :bootJar --no-daemon \
     && cp build/libs/*.jar application.jar \
     && java -Djarmode=tools -jar application.jar extract --layers --destination extracted
 

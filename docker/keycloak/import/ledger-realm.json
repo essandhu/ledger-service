@@ -8,7 +8,15 @@
       { "name": "LEDGER_ADMIN", "description": "Account lifecycle management" },
       { "name": "LEDGER_WRITE", "description": "Post transfers, journal entries, reversals" },
       { "name": "LEDGER_READ", "description": "Balances, statements, entry lookups" },
-      { "name": "LEDGER_METRICS", "description": "Scrape /actuator/metrics and /actuator/prometheus (ADR-0006)" }
+      { "name": "LEDGER_METRICS", "description": "Scrape /actuator/metrics and /actuator/prometheus (ADR-0006)" },
+      {
+        "name": "CONSOLE_OPS",
+        "description": "Ops bundle for human console users (ADR-0007) — a Keycloak composite is THE convenience path; the API itself checks only LEDGER_* roles, never this one",
+        "composite": true,
+        "composites": {
+          "realm": ["LEDGER_READ", "LEDGER_ADMIN", "LEDGER_METRICS"]
+        }
+      }
     ]
   },
   "clients": [
@@ -50,6 +58,40 @@
       "implicitFlowEnabled": false,
       "directAccessGrantsEnabled": false,
       "fullScopeAllowed": true
+    },
+    {
+      "clientId": "ledger-console",
+      "name": "Read-only console (ADR-0007) — the ONLY authorization-code client: human browser login for the server-rendered UI",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "ledger-console-dev-secret",
+      "serviceAccountsEnabled": false,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "fullScopeAllowed": true,
+      "redirectUris": ["http://localhost:8090/login/oauth2/code/keycloak"],
+      "webOrigins": ["http://localhost:8090"],
+      "attributes": {
+        "post.logout.redirect.uris": "http://localhost:8090"
+      },
+      "protocolMappers": [
+        {
+          "name": "realm roles in ID token",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "consentRequired": false,
+          "config": {
+            "multivalued": "true",
+            "claim.name": "realm_access.roles",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
     }
   ],
   "users": [
@@ -70,6 +112,26 @@
       "enabled": true,
       "serviceAccountClientId": "ledger-metrics",
       "realmRoles": ["LEDGER_METRICS"]
+    },
+    {
+      "username": "ops",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Oskar",
+      "lastName": "Ops",
+      "email": "ops@ledger.example",
+      "credentials": [{ "type": "password", "value": "ops", "temporary": false }],
+      "realmRoles": ["CONSOLE_OPS"]
+    },
+    {
+      "username": "viewer",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Vera",
+      "lastName": "Viewer",
+      "email": "viewer@ledger.example",
+      "credentials": [{ "type": "password", "value": "viewer", "temporary": false }],
+      "realmRoles": ["LEDGER_READ"]
     }
   ]
 }

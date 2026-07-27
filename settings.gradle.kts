@@ -4,3 +4,9 @@ plugins {
 }
 
 rootProject.name = "ledger"
+
+// M8 (ADR-0007): the read-only console is a separate Boot app in its own subproject, so the
+// core keeps its pure resource-server posture. Nothing is shared between the projects (no
+// subprojects {} block, deliberately) — but unqualified task names now fan out to BOTH
+// projects, so CI and the Dockerfile invoke root tasks with a leading colon (`:build`, `:bootJar`).
+include("console")

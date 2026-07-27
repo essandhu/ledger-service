@@ -1,0 +1,36 @@
+# Console configuration (ADR-0007). Host-run phase 1: the console listens on 8090 and talks
+# to the compose stack's Keycloak on localhost:8081 — one URL that works for both the
+# browser's redirects and the JVM's eager issuer discovery at startup (which is also why the
+# stack must be up BEFORE `:console:bootRun`; a wrong/down issuer fails fast at boot).
+server:
+  port: 8090
+
+spring:
+  application:
+    name: ledger-console
+  security:
+    oauth2:
+      client:
+        registration:
+          keycloak:
+            client-id: ledger-console
+            client-secret: ${LEDGER_CONSOLE_CLIENT_SECRET:ledger-console-dev-secret}
+            # openid is REQUIRED and NOT defaulted: without it login silently downgrades to
+            # plain OAuth2 (no ID token), the whoami claims vanish, and RP-initiated logout
+            # degrades to local-only. profile adds preferred_username and the display name.
+            scope: openid, profile
+        provider:
+          keycloak:
+            issuer-uri: ${LEDGER_CONSOLE_ISSUER_URI:http://localhost:8081/realms/ledger}
+            # Discovery alone would leave the principal name on OIDC's default `sub` (a
+            # UUID); properties overlay discovery, so Authentication.getName() is the
+            # human-readable username in production exactly as in the test registration.
+            user-name-attribute: preferred_username
+
+management:
+  endpoints:
+    web:
+      exposure:
+        # Health only — the console carries no metrics story of its own (the ledger's
+        # observability surface is the core's, ADR-0006).
+        include: health

@@ -195,7 +195,7 @@ the demo script additionally wants `jq`).
 
 ```sh
 docker compose up -d --build --wait   # PostgreSQL 18 + Keycloak (realm pre-provisioned) + the service
-./gradlew build                       # compile + every suite in both lanes + the coverage gate
+./gradlew build                       # every suite in both core lanes + the console suite + both coverage gates
 ```
 
 Dev endpoints: service `http://localhost:8080` · Keycloak `http://localhost:8081`
@@ -249,9 +249,12 @@ sweep convicted it. The capture script repairs the snapshot by recomputation and
 `CLEAN` before exiting; see [docs/media/](docs/media/README.md).</sub>
 
 > **Upgrading an existing stack:** Keycloak's `--import-realm` skips realms that already exist,
-> so a pre-M7 `pgdata` volume has neither the `LEDGER_METRICS` role nor the `ledger-metrics`
-> client — metric calls 403 and the Prometheus scrape fails until you reset with
-> `docker compose down -v` (or run `scripts/demo.sh`, which always starts fresh).
+> so an old `pgdata` volume is missing whatever the realm file gained since it was created —
+> pre-M7, the `LEDGER_METRICS` role and `ledger-metrics` client (metric calls 403 and the
+> Prometheus scrape fails); pre-M8, the `ledger-console` client and the `ops`/`viewer` demo
+> users (the console still boots, but browser login dead-ends on Keycloak's "Client not found"
+> page). Reset with `docker compose down -v` (or run `scripts/demo.sh`, which always starts
+> fresh).
 
 ## Testing & CI
 
@@ -260,13 +263,16 @@ sweep convicted it. The capture script repairs the snapshot by recomputation and
 | default (`./gradlew test`) | unit, property, ArchUnit, Testcontainers integration (one context, one PostgreSQL) | CI "Build, test, coverage gate" |
 | stress (`./gradlew concurrencyTest`) | the I6/I7/I8/I17 hammers — never cached, re-samples interleavings every run | CI "Concurrency proof" |
 | smoke | compose up + scripted probes over the real Keycloak issuer, including the drift demo | CI "docker-compose smoke test" |
+| console (`./gradlew :console:build`) | the read-only console's suite — login chain, role rendering, its own coverage gate | CI "Console build" |
 
-The JaCoCo gate is `check`-fatal at **0.90 line coverage** overall, with a second exact rule:
-the domain packages hold **100%** — every uncovered domain line is treated as either a missing
-proof or code that should not exist. (The only uncovered code in the whole codebase is the
-bootstrap `main()` and a catch for a JRE that lacks SHA-256, which the Java spec forbids —
-four lines, both outside domain.) Mutation testing (PIT) is wired as a non-gating report:
-`./gradlew pitest`.
+The core's JaCoCo gate is `check`-fatal at **0.90 line coverage** overall, with a second exact
+rule: the domain packages hold **100%** — every uncovered domain line is treated as either a
+missing proof or code that should not exist. (The only uncovered code in the core service is
+the bootstrap `main()` and a catch for a JRE that lacks SHA-256, which the Java spec forbids —
+four lines, both outside domain.) The console subproject carries its own separate gate,
+starting at **0.70** where the core's ratchet started
+([ADR-0007](docs/adr/ADR-0007-read-only-console.md)). Mutation testing (PIT) is wired as a
+non-gating report: `./gradlew pitest`.
 
 ## Stack
 

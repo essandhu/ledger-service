@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Ledger console — whoami</title>
+    <link rel="stylesheet" th:href="@{/css/console.css}" href="../static/css/console.css">
+</head>
+<body>
+<header class="topbar">
+    <a class="wordmark" th:href="@{/whoami}" href="whoami.html">LEDGER<span class="tick">/</span>console</a>
+    <div class="topbar-session">
+        <span class="whoami-name" th:text="${username}">ops</span>
+        <!-- POST, not a link: logout is state-changing and CSRF-protected; Thymeleaf adds
+             the hidden _csrf field to th:action forms automatically. -->
+        <form th:action="@{/logout}" action="#" method="post">
+            <button class="signout" type="submit">Sign out</button>
+        </form>
+    </div>
+</header>
+
+<main>
+    <section class="identity-card" aria-labelledby="identity-heading">
+        <header>
+            <span id="identity-heading">Session identity</span>
+            <span class="folio">realm: ledger</span>
+        </header>
+        <div class="identity-body">
+            <p class="signed-in-as">Signed in as</p>
+            <p class="account-line" th:text="${username}">ops</p>
+            <p class="full-name" th:if="${fullName}" th:text="${fullName}">Oskar Ops</p>
+
+            <div class="roles">
+                <h2>Realm roles</h2>
+                <!-- The chips ARE the no-hierarchy model: every LEDGER_* chip is a direct
+                     grant the API checks; a dashed CONSOLE_* chip is a Keycloak composite
+                     bundle that only expands to them. ops shows both sides; viewer shows
+                     a single chip. -->
+                <ul class="chip-row" th:if="${not #lists.isEmpty(roles)}">
+                    <li th:each="role : ${roles}" class="role-chip"
+                        th:classappend="${#strings.startsWith(role, 'CONSOLE_')} ? 'bundle'"
+                        th:text="${role}">LEDGER_READ</li>
+                </ul>
+                <p class="no-roles" th:if="${#lists.isEmpty(roles)}">
+                    No ledger roles on this account — sign in as <code>ops</code> or
+                    <code>viewer</code> to see the role model.
+                </p>
+            </div>
+        </div>
+    </section>
+</main>
+</body>
+</html>

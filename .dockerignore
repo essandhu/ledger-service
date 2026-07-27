@@ -5,3 +5,7 @@
 .gradle/
 build/
 docs/
+# The console (M8) never ships in this image — only its build script enters the context,
+# because settings.gradle.kts includes the project and Gradle must evaluate it.
+console/**
+!console/build.gradle.kts
