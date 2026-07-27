@@ -7,7 +7,7 @@
 ## Context and problem statement
 
 The ledger records signed monetary amounts on postings and must guarantee that every journal
-entry sums to exactly zero per currency ([PLAN.md §4.2](../PLAN.md)). That invariant is checked
+entry sums to exactly zero per currency ([invariant I1](../../README.md#the-guarantees)). That invariant is checked
 in the domain on every write, re-checked by SQL during reconciliation, and asserted by property
 tests — so the amount representation must make "sums to zero" a question with an exact answer in
 every layer: Java domain model, PostgreSQL storage, and the JSON API.
@@ -69,7 +69,8 @@ Concretely:
   a currency — whose `plus`/`negate` reject mixed currencies and use `Math.addExact` /
   `Math.negateExact`, which throw `ArithmeticException` on 64-bit overflow instead of wrapping [6].
 - Database: `posting.amount BIGINT NOT NULL CHECK (amount <> 0)`, signed, debit-positive
-  (PLAN.md §4.2); `account_balance.balance BIGINT`.
+  ([V3__journal.sql](../../src/main/resources/db/migration/V3__journal.sql));
+  `account_balance.balance BIGINT`.
 - API: `{"amount": 1099, "currency": "EUR"}`; fractional or non-numeric `amount` is rejected
   with a 400/422 problem. The API never renders `"10.99"` — display formatting is a client
   concern, driven by the ISO 4217 exponent.
@@ -121,8 +122,8 @@ Negative (accepted costs):
 
 ### Proof
 
-Automated tests that enforce this decision (invariant IDs from
-[TEST-STRATEGY.md](../TEST-STRATEGY.md)):
+Automated tests that enforce this decision (invariant IDs from the
+[guarantee table](../../README.md#the-guarantees)):
 
 - **I1 — entries balance exactly to zero per currency**: domain unit tests and integration tests
   assert `SUM(amount) = 0` per currency via exact integer equality (`== 0L`, never a tolerance);
@@ -180,7 +181,7 @@ Automated tests that enforce this decision (invariant IDs from
   edge (API in, API out, DB in, DB out, logs) needs the same canonical grammar or values
   diverge. Storage falls back to `NUMERIC` (inheriting Option B's costs) or text (no SQL
   arithmetic at all — reconciliation would parse every row). Concretely for this system:
-  idempotency uses a SHA-256 hash of the canonical request body ([PLAN.md §4.3](../PLAN.md)),
+  idempotency uses a SHA-256 hash of the canonical request body ([ADR-0004](ADR-0004-idempotency.md)),
   so `"12.50"` vs `"12.5"` — the same money — would hash as different payloads and turn a
   legitimate replay into a 422 conflict unless canonicalization is perfect.
 - Failure modes: two clients sending different-but-equal string forms breaking idempotency
@@ -226,5 +227,10 @@ Automated tests that enforce this decision (invariant IDs from
    rounding mode required when exact results are unrepresentable):
    <https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/math/BigDecimal.html>
 
-Internal: [PLAN.md](../PLAN.md) §4.2 (sign convention), §4.3 (schema), §5 (API money shape) ·
-[TEST-STRATEGY.md](../TEST-STRATEGY.md) (invariants I1, I2, I14).
+Internal: [`Money`](../../src/main/java/io/github/essandhu/ledger/domain/model/Money.java) (the
+domain representation) ·
+[`AccountType.direction()`](../../src/main/java/io/github/essandhu/ledger/domain/model/AccountType.java)
+(sign convention) ·
+[V3__journal.sql](../../src/main/resources/db/migration/V3__journal.sql) (`posting.amount` and
+`account_balance.balance` as `BIGINT`) · [README §API](../../README.md#api) (money on the wire) ·
+[guarantee table](../../README.md#the-guarantees) (invariants I1, I2, I14).

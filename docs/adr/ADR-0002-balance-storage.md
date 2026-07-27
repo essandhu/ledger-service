@@ -54,17 +54,21 @@ Every journal entry changes the balances of the accounts it touches. Two consume
 balances, with very different tolerances:
 
 1. **The overdraft check inside the posting critical section.** For accounts with
-   `allow_negative = false`, the natural balance (`raw × direction(type)`, [PLAN §4.2](../PLAN.md))
+   `allow_negative = false`, the natural balance (`raw × direction(type)` —
+   [`AccountType.direction()`](../../src/main/java/io/github/essandhu/ledger/domain/model/AccountType.java))
    may never go below zero. This check runs while holding the ordered row locks of
    [ADR-0003](ADR-0003-concurrency-control.md) — its cost is added to lock hold time, and lock
    hold time is the reciprocal of a hot account's maximum throughput. It must also be
    **synchronously** correct: an overdraft admitted now and detected later is a broken guarantee,
-   not a delayed one. (The close-time zero-balance check of PLAN §4.5 is a second consumer with
-   this same profile, sharing the same critical section.)
-2. **Client balance reads.** `GET /accounts/{id}/balance` is specified O(1) (PLAN §5);
-   as-of-timestamp reads are specified exact per account (PLAN §4.6, invariant I10).
+   not a delayed one. (The close-time zero-balance check —
+   [`CloseBalanceRule`](../../src/main/java/io/github/essandhu/ledger/domain/model/CloseBalanceRule.java)
+   — is a second consumer with this same profile, sharing the same critical section.)
+2. **Client balance reads.** `GET /accounts/{id}/balance` is specified O(1)
+   ([README §API](../../README.md#api)); as-of-timestamp reads are specified exact per account
+   (invariant I10).
 
-Postings are the append-only, privilege-enforced source of truth (PLAN §4.4): the raw balance of
+Postings are the append-only, privilege-enforced source of truth (invariant I3 — the runtime
+database role holds no `UPDATE`/`DELETE` on them): the raw balance of
 an account *is defined as* `SUM(amount)` over its postings. The question this ADR answers is
 whether the current balance is **derived on demand** from that definition, or **maintained as
 redundant state** — and if maintained, with what consistency guarantee and what defense against
@@ -78,10 +82,10 @@ the classic failure of redundant state: silent drift.
 - **Synchronous overdraft guarantee**: the non-negative rule is enforced at commit time, never
   eventually.
 - **Verifiable correctness**: redundant state is acceptable only if an automated mechanism
-  continuously proves it equal to the source of truth (invariants I4, I15 in
-  [TEST-STRATEGY.md](../TEST-STRATEGY.md)).
-- **O(1) current-balance API** (PLAN §5) and exact as-of semantics (I10) regardless of storage
-  choice.
+  continuously proves it equal to the source of truth (invariants I4, I15 in the
+  [guarantee table](../../README.md#the-guarantees)).
+- **O(1) current-balance API** ([README §API](../../README.md#api)) and exact as-of semantics
+  (I10) regardless of storage choice.
 - **v1 simplicity**: one service, one PostgreSQL; no brokers, no projectors, no extra
   infrastructure whose operational cost exceeds a portfolio project's ability to demonstrate it.
 
@@ -96,7 +100,8 @@ the classic failure of redundant state: silent drift.
 ## Decision outcome
 
 **Option B.** Postings remain the append-only source of truth. Each account has one
-`account_balance` row (`account_id` PK, `balance`, `posting_count`, `updated_at` — PLAN §4.3),
+`account_balance` row (`account_id` PK, `balance`, `posting_count`, `updated_at` —
+[V3__journal.sql](../../src/main/resources/db/migration/V3__journal.sql)),
 created with the account at balance 0 and updated **in the same database transaction** that
 inserts the entry and its postings, while holding the ordered `FOR UPDATE` locks of ADR-0003:
 
@@ -111,7 +116,7 @@ UPDATE account_balance
 As-of/historical balances are **always** computed from postings
 (`SUM(amount) WHERE account_id = ? AND posted_at <= ?`), never from the snapshot; the snapshot
 serves exactly three reads: the current-balance endpoint, the overdraft check under lock, and —
-since M2 implemented account closing — the close-time zero-balance check (PLAN §4.5), which runs
+since M2 implemented account closing — the close-time zero-balance check, which runs
 under the same ADR-0003 lock and shares the overdraft check's tolerance class: synchronous, O(1),
 never eventual.
 
@@ -133,7 +138,8 @@ Decisive reasons:
    reconciliation job exists to surface: it recomputes `SUM(amount)` per account, writes
    `reconciliation_run` / `reconciliation_finding` rows, and publishes the
    `ledger.reconciliation.drift.accounts` and `ledger.reconciliation.drift.absolute` gauges
-   (PLAN §8). A latent fear becomes a monitored, alertable signal.
+   ([README §Observability](../../README.md#observability)). A latent fear becomes a monitored,
+   alertable signal.
 
 **The `posting_count` watermark.** The snapshot carries a count of postings applied to it,
 incremented in the same UPDATE. Reconciliation compares `(balance, posting_count)` against
@@ -197,7 +203,7 @@ Negative — real costs, accepted:
 ### Proof
 
 Automated tests enforcing this decision, by invariant ID
-([TEST-STRATEGY.md](../TEST-STRATEGY.md)):
+([guarantee table](../../README.md#the-guarantees)):
 
 - **I4 — snapshot equals recomputation in every committed state.** Integration tests assert
   `account_balance.balance = SUM(amount)` and `posting_count = COUNT(*)` after every posting
@@ -254,7 +260,8 @@ Automated tests enforcing this decision, by invariant ID
 
 - Good: bounds the scan to postings since the last checkpoint; checkpoints are themselves
   append-only (no hot UPDATE row); the right structure for accelerating as-of queries and for
-  archiving old partitions behind a checkpoint (both explicitly out of v1 scope, PLAN §1).
+  archiving old partitions behind a checkpoint (both explicitly out of v1 scope — see "Future ADR
+  candidates" in the [ADR index](README.md)).
 - Bad: overdraft cost is O(tail), bounded but not O(1), and depends on checkpoint cadence — a
   second knob to operate. The checkpointer and the read path must agree exactly on the boundary
   (by `posting_count` watermark or a `posted_at`/id cut), which is subtle under concurrent
@@ -294,6 +301,9 @@ Automated tests enforcing this decision, by invariant ID
 4. PostgreSQL 18 documentation — *Heap-Only Tuples (HOT)* (updates that modify no indexed columns
    need no new index entries; intermediate versions cleaned without vacuum; `fillfactor`,
    `pg_stat_all_tables`). <https://www.postgresql.org/docs/current/storage-hot.html>
-5. Project documents: [PLAN.md](../PLAN.md) §§4.2–4.6, 5, 6, 8 ·
-   [TEST-STRATEGY.md](../TEST-STRATEGY.md) (invariants I4, I5, I10, I15) ·
+5. Internal: [V3__journal.sql](../../src/main/resources/db/migration/V3__journal.sql)
+   (the `account_balance` snapshot) ·
+   [V5__reconciliation.sql](../../src/main/resources/db/migration/V5__reconciliation.sql)
+   (run and finding tables) · [README §The write path](../../README.md#the-write-path) ·
+   [guarantee table](../../README.md#the-guarantees) (invariants I4, I5, I10, I15) ·
    [ADR-0003](ADR-0003-concurrency-control.md) (ordered locking on `account_balance` rows).

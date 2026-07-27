@@ -6,9 +6,12 @@
 
 ## Context and problem statement
 
-A posting transaction touches N ≥ 2 accounts: it validates account status (§4.5 of
-[PLAN.md](../PLAN.md)), validates zero-sum per currency, applies the overdraft policy to every
-`allow_negative = false` account (natural balance = raw × direction, §4.2), inserts one
+A posting transaction touches N ≥ 2 accounts: it validates account status
+([`AccountStatus`](../../src/main/java/io/github/essandhu/ledger/domain/model/AccountStatus.java)),
+validates zero-sum per currency, applies the overdraft policy to every
+`allow_negative = false` account (natural balance = raw × direction —
+[`AccountType.direction()`](../../src/main/java/io/github/essandhu/ledger/domain/model/AccountType.java)),
+inserts one
 `journal_entry` row plus its `posting` rows, and updates the `account_balance` snapshot of every
 touched account ([ADR-0002](ADR-0002-balance-storage.md)). Several of these transactions run in
 parallel against overlapping account sets.
@@ -26,7 +29,7 @@ Without a serialization mechanism per account, four races break the system:
 The overdraft check is the crux: it is an inherent **read–check–write** — read the balance,
 compare against policy, conditionally reject. Any correct scheme must make that sequence atomic
 per account. The question is *how* to serialize per-account work, not *whether* to. This decision
-also fixes §4.6 of the plan: `posted_at` is assigned under the per-account serialization point, so
+also fixes the time model: `posted_at` is assigned under the per-account serialization point, so
 posted-at order equals commit order per account, which is what makes as-of queries exact.
 
 ## Decision drivers
@@ -101,7 +104,7 @@ Positive:
   safely under their idempotency key, [ADR-0004](ADR-0004-idempotency.md).) Simpler API
   semantics, simpler tests.
 - Fair-ish FIFO queueing on hot accounts; bounded, measurable latency instead of probabilistic failure.
-- `posted_at` assigned under the lock ⇒ exact per-account as-of queries (PLAN.md §4.6).
+- `posted_at` assigned under the lock ⇒ exact per-account as-of queries (invariant I10).
 - Portable idiom: `SELECT … FOR UPDATE` on an ordinary query is technically a PostgreSQL
   extension (the SQL standard admits `FOR UPDATE` only as a cursor option), but every major RDBMS
   supports the idiom with equivalent semantics (MySQL/InnoDB, Oracle, SQL Server via `UPDLOCK`),
@@ -138,7 +141,7 @@ queue lives.
 
 ### Proof
 
-Enforced by the invariant suite in [TEST-STRATEGY.md](../TEST-STRATEGY.md); all concurrency tests
+Enforced by the invariant suite in the [guarantee table](../../README.md#the-guarantees); all concurrency tests
 run against real PostgreSQL 18.4 via Testcontainers (no H2 anywhere):
 
 - **I7 — no lost updates**: N threads each post one unit deposit to the same account concurrently;
@@ -160,8 +163,8 @@ run against real PostgreSQL 18.4 via Testcontainers (no H2 anywhere):
   query orders arbitrary account-UUID inputs canonically.
 
 **Landed M5 (2026-07-26).** Two lanes. The `concurrency`-tagged stress suite runs as its own CI
-job (`Concurrency proof`; enrolling it in branch protection's required checks is the one-time
-repo setting that finishes TEST-STRATEGY §5's "required"): `DepositRaceConcurrencyTest` (I7),
+job (`Concurrency proof`, a required check in branch protection):
+`DepositRaceConcurrencyTest` (I7),
 `OverdraftRaceConcurrencyTest` (I6 — deposits racing withdrawals, final state plus a
 full-history prefix walk, which mixed traffic makes the only sound verdict),
 `BidirectionalTransferConcurrencyTest` (I17 with I4/I5 and the lock-wait metric asserted), and
@@ -277,5 +280,10 @@ prevents races; the index makes duplicate request execution unable to commit twi
 6. PostgreSQL 17 Documentation, "System Administration Functions — Advisory Lock Functions"
    (`pg_advisory_xact_lock(key bigint)` / `(key1 int, key2 int)`) —
    https://www.postgresql.org/docs/17/functions-admin.html
-7. Internal: [PLAN.md](../PLAN.md) §4.2 (sign convention), §4.5 (lifecycle), §4.6 (time), §6
-   (consistency summary); [TEST-STRATEGY.md](../TEST-STRATEGY.md) (invariants I4, I6, I7, I17; M5).
+7. Internal:
+   [`AccountType.direction()`](../../src/main/java/io/github/essandhu/ledger/domain/model/AccountType.java)
+   (sign convention) ·
+   [`AccountStatus`](../../src/main/java/io/github/essandhu/ledger/domain/model/AccountStatus.java)
+   (lifecycle) · [README §The write path](../../README.md#the-write-path) (lock ordering and the
+   consistency summary) · [guarantee table](../../README.md#the-guarantees)
+   (invariants I4, I6, I7, I17).

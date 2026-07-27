@@ -9,7 +9,7 @@ plugins {
 
 group = "io.github.essandhu"
 version = "0.1.0-SNAPSHOT"
-description = "Standalone double-entry ledger service — see docs/PLAN.md"
+description = "Standalone double-entry ledger service — see README.md"
 
 java {
     toolchain {
@@ -148,11 +148,11 @@ tasks.jacocoTestCoverageVerification {
             limit {
                 counter = "LINE"
                 value = "COVEREDRATIO"
-                // Coverage ratchet (TEST-STRATEGY.md §5): M1 → 0.70, M2 → 0.80, M4 → 0.85, M7 → 0.90 (final).
+                // Coverage ratchet, tightened per milestone: M1 → 0.70, M2 → 0.80, M4 → 0.85, M7 → 0.90 (final).
                 minimum = "0.90".toBigDecimal()
             }
         }
-        // M7 (TEST-STRATEGY.md §5): the domain packages carry the invariants — every line is
+        // M7: the domain packages carry the invariants — every line is
         // either exercised or should not exist. 1.00 with NO exclusions: the only uncovered
         // code in the codebase (bootstrap main(), the JRE-mandated SHA-256 catch — four lines)
         // lives outside domain, so this rule stays exact where exactness is the point.

@@ -7,8 +7,8 @@
 ## Context and problem statement
 
 The test strategy leans on property-based tests for the core invariants (entries balance,
-balances equal the sum of postings, idempotent replays never double-post — see
-[TEST-STRATEGY.md](../TEST-STRATEGY.md)). The original plan named **jqwik**, the de-facto standard
+balances equal the sum of postings, idempotent replays never double-post — see the
+[guarantee table](../../README.md#the-guarantees)). The original plan named **jqwik**, the de-facto standard
 JVM property-testing library. Planning-time compatibility research surfaced three blocking facts:
 
 1. **Platform incompatibility.** Spring Boot 4.1 manages JUnit 6 (Platform 6.0.3). jqwik 1.10.1
@@ -93,7 +93,7 @@ generate (longs, currencies, small object graphs), so we need perhaps 10% of wha
 
 ### Proof
 
-- The invariant catalogue in [TEST-STRATEGY.md](../TEST-STRATEGY.md) marks which invariants are
+- The [guarantee table](../../README.md#the-guarantees) marks which invariants are
   property-proven (I1, I2, I4, I5, I8, I10 at minimum) — those tests are written against the
   harness API.
 - Harness meta-tests (failing-property seed replay, shrinking termination) ship with the harness

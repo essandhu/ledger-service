@@ -37,9 +37,9 @@
     proven by a port-level property (generated payloads: tampered twin conflicts, equal twin
     replays) plus an example-based wire test (reordered JSON fields/whitespace replay) — the
     RANDOM-interleaving I8 hammer remains M5's. The §Mechanics notes promising API-docs
-    text for the block-instead-of-409 behavior and the mutable-response caveat are
-    discharged by PLAN §5's M4 pin for now; client-facing API documentation lands with M7's
-    docs polish.
+    text for the block-instead-of-409 behavior and the mutable-response caveat are deferred
+    at M4; client-facing API documentation lands with M7's docs polish (see the M7 note
+    below).
 - **M7 (2026-07-26)**: the deferred client-facing text is discharged into the OpenAPI spec —
   an `OperationCustomizer` in `OpenApiConfig` keys off the `Idempotency-Key` parameter, so
   every money mover (present and future) carries the replay/conflict semantics including both
@@ -51,7 +51,7 @@
 
 Every money-moving endpoint (`POST /transfers`, `POST /journal-entries`,
 `POST /journal-entries/{id}/reversal`) creates a journal entry inside one local ACID transaction
-([PLAN.md §5, §6](../PLAN.md)). The failure that idempotency must survive is the *ambiguous
+([README §The write path](../../README.md#the-write-path)). The failure that idempotency must survive is the *ambiguous
 timeout*: the client sends a posting, the server commits it, and the response is lost. The client
 cannot distinguish "never happened" from "happened, reply lost" — its only safe move is to retry.
 Without protection, that retry moves the money twice; in a ledger, a double-post is silent data
@@ -59,7 +59,7 @@ corruption that only reconciliation against an external system would ever find.
 
 We therefore require a client-supplied `Idempotency-Key` header on every money-moving endpoint
 (`POST /transfers`, `POST /journal-entries`, `POST /journal-entries/{id}/reversal`)
-([PLAN.md §1](../PLAN.md)). This ADR decides three coupled sub-questions:
+([README §API](../../README.md#api)). This ADR decides three coupled sub-questions:
 
 1. **Scope** — what makes a key unique: globally, per principal, or per (principal, endpoint)?
 2. **Conflict detection** — how to tell a legitimate replay (same request again) from a client
@@ -86,7 +86,7 @@ its recommendations fit a ledger and document the one place we deviate.
 - **Operational simplicity.** PostgreSQL only — no Redis, no cache tier; correctness must not
   depend on a second store being in sync.
 - **Provability.** The semantics must be expressible as invariants I8/I9 and the M5 hammer test
-  ([TEST-STRATEGY.md](../TEST-STRATEGY.md)).
+  ([guarantee table](../../README.md#the-guarantees)).
 
 ## Considered options
 
@@ -120,7 +120,9 @@ Decisive reasons:
    — a double post is structurally impossible, not merely unlikely.
 3. **The backstop outlives the bookkeeping.** The partial unique index
    `journal_entry(created_by, idempotency_key) WHERE idempotency_key IS NOT NULL`
-   ([PLAN.md §4.3](../PLAN.md)) lives on the entry itself, which is kept forever. Even a future
+   (`journal_entry_idem_backstop` in
+   [V3__journal.sql](../../src/main/resources/db/migration/V3__journal.sql))
+   lives on the entry itself, which is kept forever. Even a future
    purge of `idempotency_record` can degrade only the *diagnostics* (replay-vs-conflict
    discrimination), never the *safety* (at most one entry per key, ever).
 
@@ -158,7 +160,8 @@ Decisive reasons:
   (`ledger.idempotency.purge.enabled=false`). The purge design, for when volume demands: a
   scheduled batched delete — `DELETE FROM idempotency_record WHERE ctid IN (SELECT ctid FROM
   idempotency_record WHERE expires_at < now() LIMIT 1000)` in a loop — using the
-  `idempotency_record(expires_at)` index from [PLAN.md §4.3](../PLAN.md). Enabling it is a
+  `idempotency_record(expires_at)` index from
+  [V4__idempotency.sql](../../src/main/resources/db/migration/V4__idempotency.sql). Enabling it is a
   configuration change, not a migration.
 
 ### Consequences
@@ -190,7 +193,7 @@ Negative — real costs, accepted:
 
 ### Proof
 
-From [TEST-STRATEGY.md](../TEST-STRATEGY.md), landing in M4/M5:
+From the [guarantee table](../../README.md#the-guarantees), landing in M4/M5:
 
 - **I8 — replay identity** (integration, Testcontainers PostgreSQL): posting the same
   (principal, key, payload) twice yields exactly one `journal_entry` row ever; the second
@@ -260,7 +263,8 @@ From [TEST-STRATEGY.md](../TEST-STRATEGY.md), landing in M4/M5:
 
 - Good: hashes what the service will actually act on, so equality means semantic equality of the
   command; formatting differences cannot cause false conflicts; the stored 64-char hex fits
-  `idempotency_record.request_hash` as specified in [PLAN.md §4.3](../PLAN.md).
+  `idempotency_record.request_hash` as specified in
+  [V4__idempotency.sql](../../src/main/resources/db/migration/V4__idempotency.sql).
 - Bad: the canonical form is a frozen contract (see Consequences); validation must run before the
   idempotency check, so a request that fails parsing gets no idempotency handling at all
   (acceptable: parsing is deterministic and side-effect-free). Slightly more code on the hot path.
@@ -313,6 +317,9 @@ From [TEST-STRATEGY.md](../TEST-STRATEGY.md), landing in M4/M5:
   committed atomically with the operation's effects):
   <https://brandur.org/idempotency-keys>
 - RFC 9457, *Problem Details for HTTP APIs*: <https://www.rfc-editor.org/rfc/rfc9457>
-- Internal: [PLAN.md](../PLAN.md) §4.3 (schema, indexes), §5 (API semantics) ·
-  [TEST-STRATEGY.md](../TEST-STRATEGY.md) (I8, I9, M5 hammer) ·
+- Internal: [V4__idempotency.sql](../../src/main/resources/db/migration/V4__idempotency.sql)
+  (the `idempotency_record` schema and its indexes) ·
+  [V3__journal.sql](../../src/main/resources/db/migration/V3__journal.sql)
+  (the `journal_entry_idem_backstop` index) · [README §API](../../README.md#api)
+  (API semantics) · [guarantee table](../../README.md#the-guarantees) (I8, I9, M5 hammer) ·
   [ADR-0002](ADR-0002-balance-storage.md) · [ADR-0003](ADR-0003-concurrency-control.md)

@@ -25,8 +25,8 @@ jobs:
           java-version: "21"
       - uses: gradle/actions/setup-gradle@v6
       # build runs: compile, the default test lane (Testcontainers → real PostgreSQL on the
-      # runner's Docker), ArchUnit rules, and the JaCoCo coverage gate (ratchet:
-      # TEST-STRATEGY.md §5). The concurrency lane is EXCLUDED here only because it runs as
+      # runner's Docker), ArchUnit rules, and the JaCoCo coverage gate (0.90 overall, 1.00
+      # exact on the domain packages). The concurrency lane is EXCLUDED here only because it runs as
       # its own required job below, in parallel — a local `./gradlew build` still runs both.
       - run: ./gradlew build -x concurrencyTest
       - uses: actions/upload-artifact@v7
