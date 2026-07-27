@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments :: head('Ledger console — error')}"></head>
+<body>
+<header th:replace="~{fragments :: topbar('')}"></header>
+
+<main>
+    <!-- The problem fragment doubles as the htmx error response (app.js re-enables 4xx/5xx
+         swaps, which htmx 2 refuses by default). This template is ALSO Boot's fallback
+         error view for non-advice errors, whose model has `error`/`status` but not the
+         advice's `heading`/`title` — hence the fallbacks. -->
+    <section class="error-card" th:fragment="problem" aria-labelledby="error-heading">
+        <header>
+            <span class="status-code mono" th:text="${status}">404</span>
+            <h1 id="error-heading" th:text="${heading} ?: ${error}">Nothing at this address</h1>
+        </header>
+        <p class="error-title" th:if="${title}" th:text="${title}">Not Found</p>
+        <p class="error-detail" th:if="${detail}" th:text="${detail}">account … does not exist</p>
+        <p class="error-type mono" th:if="${type}" th:text="${type}">https://…/problems/…</p>
+        <p class="error-nav"><a th:href="@{/accounts}">Back to accounts</a></p>
+    </section>
+</main>
+
+<th:block th:replace="~{fragments :: scripts}"></th:block>
+</body>
+</html>

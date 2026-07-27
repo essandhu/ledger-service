@@ -1,23 +1,8 @@
 <!doctype html>
 <html lang="en" xmlns:th="http://www.thymeleaf.org">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Ledger console — whoami</title>
-    <link rel="stylesheet" th:href="@{/css/console.css}" href="../static/css/console.css">
-</head>
+<head th:replace="~{fragments :: head('Ledger console — whoami')}"></head>
 <body>
-<header class="topbar">
-    <a class="wordmark" th:href="@{/whoami}" href="whoami.html">LEDGER<span class="tick">/</span>console</a>
-    <div class="topbar-session">
-        <span class="whoami-name" th:text="${username}">ops</span>
-        <!-- POST, not a link: logout is state-changing and CSRF-protected; Thymeleaf adds
-             the hidden _csrf field to th:action forms automatically. -->
-        <form th:action="@{/logout}" action="#" method="post">
-            <button class="signout" type="submit">Sign out</button>
-        </form>
-    </div>
-</header>
+<header th:replace="~{fragments :: topbar('whoami')}"></header>
 
 <main>
     <section class="identity-card" aria-labelledby="identity-heading">
@@ -49,5 +34,7 @@
         </div>
     </section>
 </main>
+
+<th:block th:replace="~{fragments :: scripts}"></th:block>
 </body>
 </html>

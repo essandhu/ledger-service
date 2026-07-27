@@ -34,3 +34,9 @@ management:
         # Health only — the console carries no metrics story of its own (the ledger's
         # observability surface is the core's, ADR-0006).
         include: health
+
+ledger:
+  api:
+    # The core service, as seen from the host-run console. Every call carries the user's own
+    # token (the relay in ApiClientConfig) — the console holds no API credential of its own.
+    base-url: ${LEDGER_CONSOLE_API_BASE_URL:http://localhost:8080}

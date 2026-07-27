@@ -1,0 +1,32 @@
+<!doctype html>
+<!-- The load-more unit, in its OWN template deliberately: a fragment defined inside
+     account.html would also render at its definition site (fragments are normal markup in
+     their home template), duplicating every row. Data rows plus, when the page ran full, a
+     fresh sentinel row whose button swaps THIS fragment in via outerHTML — rows append in
+     place, the button carries the next cursor, and it disappears when a page comes back
+     short (content < limit is the caught-up signal; nextCursor presence is NOT — it echoes
+     even on the last page). -->
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<body>
+<table>
+<tbody th:fragment="statementRows" th:remove="tag">
+<tr th:each="line : ${lines}">
+    <td><time th:attr="datetime=${line.postedAt}"
+              th:text="${line.postedAt}">2026-07-27T10:00:00Z</time></td>
+    <td><a class="mono" th:href="@{/entries/{id}(id=${line.entryId})}"
+           th:text="${#strings.substring(line.entryId, 0, 8)}">9b2e1a70</a></td>
+    <td><span th:class="|side-chip side-${line.sideCss}|"
+              th:text="${line.side}">DEBIT</span></td>
+    <td class="num mono" th:text="${line.amount}">123.45 EUR</td>
+</tr>
+<tr th:if="${moreAvailable}" th:id="|more-${accountId}|" class="load-more-row">
+    <td colspan="4">
+        <button class="load-more"
+                th:attr="hx-get=@{/accounts/{id}/statement(id=${accountId}, cursor=${nextCursor})}, hx-target=|#more-${accountId}|"
+                hx-swap="outerHTML">Load more</button>
+    </td>
+</tr>
+</tbody>
+</table>
+</body>
+</html>

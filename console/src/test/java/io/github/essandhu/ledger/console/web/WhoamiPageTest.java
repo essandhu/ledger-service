@@ -1,27 +1,22 @@
 package io.github.essandhu.ledger.console.web;
 
-import java.util.List;
-import java.util.Map;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
-import org.springframework.security.oauth2.core.oidc.OidcIdToken;
-import org.springframework.security.oauth2.core.oidc.user.DefaultOidcUser;
-import org.springframework.security.oauth2.core.oidc.user.OidcUserAuthority;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import org.springframework.test.web.servlet.assertj.MvcTestResult;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
 import io.github.essandhu.ledger.console.config.ConsoleRealmRoleMapper;
+import io.github.essandhu.ledger.console.support.ConsoleSessions;
 import io.github.essandhu.ledger.console.support.ConsoleWebTest;
 import io.github.essandhu.ledger.console.support.TestClientRegistrations;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.oidcLogin;
 
 /**
  * The M8a demo, as tests: log in and see the role chips; log out and land on Keycloak.
@@ -39,18 +34,8 @@ class WhoamiPageTest {
     @Autowired
     MockMvcTester mvc;
 
-    /** An OIDC session for {@code username} whose ID token carries the given realm roles. */
     private static RequestPostProcessor user(String username, String... realmRoles) {
-        OidcIdToken idToken = OidcIdToken.withTokenValue("id-token")
-                .claim("sub", username)
-                .claim("preferred_username", username)
-                .claim("realm_access", Map.of("roles", List.of(realmRoles)))
-                .build();
-        var authorities = new ConsoleRealmRoleMapper()
-                .mapAuthorities(List.of(new OidcUserAuthority(idToken)));
-        return oidcLogin()
-                .clientRegistration(TestClientRegistrations.keycloak())
-                .oidcUser(new DefaultOidcUser(authorities, idToken, "preferred_username"));
+        return ConsoleSessions.user(username, realmRoles);
     }
 
     @Nested

@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments :: head('Ledger console — entry')}"></head>
+<body>
+<header th:replace="~{fragments :: topbar('accounts')}"></header>
+
+<main class="wide">
+    <section class="identity-card" aria-labelledby="entry-heading">
+        <header>
+            <span id="entry-heading">Journal entry</span>
+            <span class="folio mono" th:text="${entry.id}">uuid</span>
+        </header>
+        <div class="identity-body">
+            <p class="account-meta">
+                <span th:class="|type-tag entry-${typeCss}|"
+                      th:text="${entry.entryType}">TRANSFER</span>
+                <span th:if="${entry.description}" th:text="${entry.description}">demo transfer</span>
+            </p>
+            <p class="account-times">
+                posted <time th:attr="datetime=${entry.postedAt}"
+                             th:text="${entry.postedAt}">2026-07-27T10:00:00Z</time>
+                · by <span class="mono" th:text="${entry.createdBy}">service-account-ledger-cli</span>
+            </p>
+            <p class="reversal-note" th:if="${entry.reversalOf}">
+                This entry exactly negates
+                <a class="mono" th:href="@{/entries/{id}(id=${entry.reversalOf})}"
+                   th:text="${#strings.substring(entry.reversalOf, 0, 8)}">9b2e1a70</a>
+                — a REVERSAL never edits the original, it posts the opposite legs (I11).
+            </p>
+        </div>
+    </section>
+
+    <section class="panel" aria-labelledby="legs-heading">
+        <header class="panel-head">
+            <h1 id="legs-heading">Legs</h1>
+            <p class="panel-note">raw signed amounts, debit-positive — the sign IS the side</p>
+        </header>
+        <div class="table-scroll">
+            <table class="ruled">
+                <thead>
+                <tr><th>Account</th><th>Side</th><th class="num">Amount (raw)</th></tr>
+                </thead>
+                <tbody>
+                <tr th:each="leg : ${legs}">
+                    <td><a class="mono" th:href="@{/accounts/{id}(id=${leg.accountId})}"
+                           th:text="${#strings.substring(leg.accountId, 0, 8)}">9b2e1a70</a></td>
+                    <td><span th:class="|side-chip side-${leg.sideCss}|"
+                              th:text="${leg.side}">DEBIT</span></td>
+                    <td class="num mono" th:text="${leg.amount}">123.45 EUR</td>
+                </tr>
+                </tbody>
+                <tfoot>
+                <!-- The I1 moment: one total row PER CURRENCY (balance is judged per
+                     currency, never across), each summing to a rendered zero. Computed
+                     here from the wire amounts — not trusted from anywhere. -->
+                <tr th:each="total : ${totals}" class="total-row"
+                    th:classappend="${total.balanced} ? 'balanced' : 'unbalanced'">
+                    <td class="total-label" th:text="|Σ ${total.currency}|">Σ EUR</td>
+                    <td><span class="stamp" th:text="${total.balanced} ? 'balanced' : 'DOES NOT BALANCE'">balanced</span></td>
+                    <td class="num mono" th:text="${total.total}">0.00 EUR</td>
+                </tr>
+                </tfoot>
+            </table>
+        </div>
+        <p class="caption">A legal entry nets to exactly zero in every currency it touches —
+            the ledger's first guarantee, rendered.</p>
+    </section>
+</main>
+
+<th:block th:replace="~{fragments :: scripts}"></th:block>
+</body>
+</html>
