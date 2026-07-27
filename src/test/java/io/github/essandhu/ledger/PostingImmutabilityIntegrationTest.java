@@ -120,28 +120,34 @@ class PostingImmutabilityIntegrationTest {
             }
             // Two balanced legs (+100 / −100) on the one account: the I1 zero-sum shape, so this
             // marker pair never disturbs the global per-currency conservation (I5) that other
-            // tests assert by SQL.
+            // tests assert by SQL. posted_at COPIES the header's instant rather than calling
+            // now() again — in autocommit each statement gets its own now(), and since M6 the
+            // reconciliation sweep re-verifies the posted_at denormalization at rest (PLAN
+            // §4.3): a fixture with a mismatched leg would be flagged as corruption, correctly.
             for (long amount : new long[] {100, -100}) {
                 try (PreparedStatement insert = connection.prepareStatement("""
                         INSERT INTO posting (id, entry_id, account_id, amount, currency, posted_at)
-                        VALUES (?, ?, ?, ?, 'USD', now())
+                        SELECT ?, id, ?, ?, 'USD', posted_at FROM journal_entry WHERE id = ?
                         """)) {
                     insert.setObject(1, UUID.randomUUID());
-                    insert.setObject(2, entryId);
-                    insert.setObject(3, accountId);
-                    insert.setLong(4, amount);
+                    insert.setObject(2, accountId);
+                    insert.setLong(3, amount);
+                    insert.setObject(4, entryId);
                     assertThat(insert.executeUpdate()).isEqualTo(1);
                 }
             }
             // The snapshot row, last, once its numbers are true: raw fixtures honor by hand what
             // the M2 posting transaction honors in code — balance = Σ legs = 0, posting_count = 2
-            // (I4), and no account without a balance row (the ADR-0003 lock-protocol precondition
-            // that JournalSchemaIntegrationTest asserts globally).
+            // (I4, which the M6 sweep now asserts at rest for EVERY account), updated_at = the
+            // legs' posted_at (the ADR-0002 applyDelta contract), and no account without a
+            // balance row (the ADR-0003 lock-protocol precondition that
+            // JournalSchemaIntegrationTest asserts globally).
             try (PreparedStatement insert = connection.prepareStatement("""
                     INSERT INTO account_balance (account_id, balance, posting_count, updated_at)
-                    VALUES (?, 0, 2, now())
+                    SELECT ?, 0, 2, posted_at FROM journal_entry WHERE id = ?
                     """)) {
                 insert.setObject(1, accountId);
+                insert.setObject(2, entryId);
                 assertThat(insert.executeUpdate()).isEqualTo(1);
             }
         }

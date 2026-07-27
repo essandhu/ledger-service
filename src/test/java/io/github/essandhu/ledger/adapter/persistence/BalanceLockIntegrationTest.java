@@ -126,18 +126,34 @@ class BalanceLockIntegrationTest {
     void apply_delta_bumps_balance_posting_count_and_updated_at_exactly() {
         AccountId id = accountWithZeroBalance(0x22);
 
-        transactionTemplate.executeWithoutResult(tx -> {
-            balances.lockBalances(List.of(id)); // the port contract: deltas apply only under the row's lock
-            balances.applyDelta(id, 1234, 2, T1);
-        });
-        assertBalanceRow(id, 1234, 2, T1);
+        try {
+            transactionTemplate.executeWithoutResult(tx -> {
+                balances.lockBalances(List.of(id)); // the port contract: deltas apply only under the row's lock
+                balances.applyDelta(id, 1234, 2, T1);
+            });
+            assertBalanceRow(id, 1234, 2, T1);
 
-        transactionTemplate.executeWithoutResult(tx -> {
-            balances.lockBalances(List.of(id));
-            balances.applyDelta(id, -234, 3, T2);
-        });
-        // += semantics, not overwrite: the second bump accumulates onto the first.
-        assertBalanceRow(id, 1000, 5, T2);
+            transactionTemplate.executeWithoutResult(tx -> {
+                balances.lockBalances(List.of(id));
+                balances.applyDelta(id, -234, 3, T2);
+            });
+            // += semantics, not overwrite: the second bump accumulates onto the first.
+            assertBalanceRow(id, 1000, 5, T2);
+        } finally {
+            // M6 discipline: these port-level bumps have no posting rows behind them, and the
+            // reconciliation sweep now asserts snapshot = Σ postings AT REST for every account
+            // — so the fixture compensates back to the zero seed (the JournalSchema restore
+            // idiom), whatever prefix of the bumps got applied before a failure.
+            transactionTemplate.executeWithoutResult(tx -> {
+                List<AccountBalance> current = balances.lockBalances(List.of(id));
+                if (!current.isEmpty()) {
+                    AccountBalance row = current.get(0);
+                    if (row.balance() != 0 || row.postingCount() != 0) {
+                        balances.applyDelta(id, -row.balance(), -row.postingCount(), T2);
+                    }
+                }
+            });
+        }
     }
 
     @Test

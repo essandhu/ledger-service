@@ -52,6 +52,7 @@ class AuthzMatrixIntegrationTest {
 
     private String existingId;
     private String entryId;
+    private String runId;
 
     @BeforeAll
     void createFixtures() throws Exception {
@@ -83,6 +84,13 @@ class AuthzMatrixIntegrationTest {
                 .exchange();
         assertThat(transfer).hasStatus(HttpStatus.CREATED);
         entryId = JsonPath.read(transfer.getResponse().getContentAsString(), "$.id");
+
+        // M6 run sentinel for the read cells, built with exactly the role that may build it.
+        MvcTestResult run = mvc.post().uri("/api/v1/reconciliation-runs")
+                .with(principal("LEDGER_ADMIN"))
+                .exchange();
+        assertThat(run).hasStatus(HttpStatus.CREATED);
+        runId = JsonPath.read(run.getResponse().getContentAsString(), "$.id");
     }
 
     private String createFixtureAccount(String label) throws Exception {
@@ -214,6 +222,39 @@ class AuthzMatrixIntegrationTest {
                 new Cell("HEAD", "POSTINGS", NO_ROLES, 403),
                 new Cell("HEAD", "POSTINGS", "LEDGER_READ", 200),
 
+                // ── M6 reconciliation (PLAN §5): the trigger is LEDGER_ADMIN only; run and
+                // findings reads are LEDGER_READ like every other read — no hierarchy, so the
+                // ADMIN that triggers cannot read back without READ. The right-role POST runs
+                // a real sweep: there is no body to invalidate, and a sweep is additive-safe
+                // (it appends only its own run row; gauges are per-last-run state).
+                new Cell("POST", "/api/v1/reconciliation-runs", NONE, 401),
+                new Cell("POST", "/api/v1/reconciliation-runs", NO_ROLES, 403),
+                new Cell("POST", "/api/v1/reconciliation-runs", "LEDGER_READ", 403),
+                new Cell("POST", "/api/v1/reconciliation-runs", "LEDGER_WRITE", 403),
+                new Cell("POST", "/api/v1/reconciliation-runs", "LEDGER_ADMIN", 201),
+
+                new Cell("GET", "RUN", NONE, 401),
+                new Cell("GET", "RUN", NO_ROLES, 403),
+                new Cell("GET", "RUN", "LEDGER_READ", 200),
+                new Cell("GET", "RUN", "LEDGER_WRITE", 403),
+                new Cell("GET", "RUN", "LEDGER_ADMIN", 403),
+                new Cell("HEAD", "RUN", NO_ROLES, 403),
+                new Cell("HEAD", "RUN", "LEDGER_READ", 200),
+
+                // The findings path's extra segment needs its own matchers (the M3 lesson) —
+                // these cells are the proof they exist.
+                new Cell("GET", "RUN_FINDINGS", NONE, 401),
+                new Cell("GET", "RUN_FINDINGS", NO_ROLES, 403),
+                new Cell("GET", "RUN_FINDINGS", "LEDGER_READ", 200),
+                new Cell("GET", "RUN_FINDINGS", "LEDGER_WRITE", 403),
+                new Cell("GET", "RUN_FINDINGS", "LEDGER_ADMIN", 403),
+                new Cell("HEAD", "RUN_FINDINGS", NO_ROLES, 403),
+                new Cell("HEAD", "RUN_FINDINGS", "LEDGER_READ", 200),
+
+                // PLAN §5 defines no reconciliation-runs collection listing — the namespace
+                // backstop holds it, even for LEDGER_READ (the journal-entries precedent).
+                new Cell("GET", "/api/v1/reconciliation-runs", "LEDGER_READ", 403),
+
                 // springdoc surfaces: any authenticated principal, no role required
                 new Cell("GET", "/v3/api-docs", NONE, 401),
                 new Cell("GET", "/v3/api-docs", NO_ROLES, 200),
@@ -238,6 +279,8 @@ class AuthzMatrixIntegrationTest {
             case "ENTRY_REVERSAL" -> "/api/v1/journal-entries/" + entryId + "/reversal";
             case "BALANCE" -> "/api/v1/accounts/" + existingId + "/balance";
             case "POSTINGS" -> "/api/v1/accounts/" + existingId + "/postings";
+            case "RUN" -> "/api/v1/reconciliation-runs/" + runId;
+            case "RUN_FINDINGS" -> "/api/v1/reconciliation-runs/" + runId + "/findings";
             default -> cell.uri();
         };
         var request = switch (cell.method()) {
@@ -286,6 +329,16 @@ class AuthzMatrixIntegrationTest {
         assertThat(mvc.get().uri(unknown + "/postings").with(principal("LEDGER_WRITE")))
                 .hasStatus(HttpStatus.FORBIDDEN);
         assertThat(mvc.get().uri(unknown + "/postings").with(principal("LEDGER_READ")))
+                .hasStatus(HttpStatus.NOT_FOUND);
+        // M6 reads follow the same precedence.
+        String unknownRun = "/api/v1/reconciliation-runs/" + UUID.randomUUID();
+        assertThat(mvc.get().uri(unknownRun).with(principal("LEDGER_ADMIN")))
+                .hasStatus(HttpStatus.FORBIDDEN);
+        assertThat(mvc.get().uri(unknownRun).with(principal("LEDGER_READ")))
+                .hasStatus(HttpStatus.NOT_FOUND);
+        assertThat(mvc.get().uri(unknownRun + "/findings").with(principal("LEDGER_ADMIN")))
+                .hasStatus(HttpStatus.FORBIDDEN);
+        assertThat(mvc.get().uri(unknownRun + "/findings").with(principal("LEDGER_READ")))
                 .hasStatus(HttpStatus.NOT_FOUND);
     }
 }

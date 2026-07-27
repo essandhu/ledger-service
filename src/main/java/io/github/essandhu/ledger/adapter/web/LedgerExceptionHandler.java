@@ -19,6 +19,7 @@ import io.github.essandhu.ledger.application.port.in.AccountNotFound;
 import io.github.essandhu.ledger.application.port.in.EntryNotFound;
 import io.github.essandhu.ledger.application.port.in.IdempotencyKeyConflict;
 import io.github.essandhu.ledger.application.port.in.InvalidIdempotencyKey;
+import io.github.essandhu.ledger.application.port.in.ReconciliationRunNotFound;
 import io.github.essandhu.ledger.domain.error.AccountBalanceNotZero;
 import io.github.essandhu.ledger.domain.error.AccountClosed;
 import io.github.essandhu.ledger.domain.error.AccountFrozen;
@@ -232,6 +233,12 @@ class LedgerExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(EntryNotFound.class)
     ProblemDetail entryNotFound(EntryNotFound exception) {
         // Path-addressed miss — bare 404, about:blank, the exact mirror of accountNotFound.
+        return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, exception.getMessage());
+    }
+
+    @ExceptionHandler(ReconciliationRunNotFound.class)
+    ProblemDetail reconciliationRunNotFound(ReconciliationRunNotFound exception) {
+        // M6: same path-addressed-miss doctrine as the account and entry 404s.
         return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, exception.getMessage());
     }
 

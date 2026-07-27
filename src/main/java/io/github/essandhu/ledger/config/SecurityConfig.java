@@ -70,6 +70,22 @@ class SecurityConfig {
                         .hasRole("LEDGER_READ")
                         .requestMatchers(HttpMethod.HEAD, "/api/v1/journal-entries/*")
                         .hasRole("LEDGER_READ")
+                        // M6 reconciliation (PLAN §5): the trigger is account-POST-shaped
+                        // (ADMIN); the run and findings reads are LEDGER_READ like every other
+                        // read — no hierarchy, so ADMIN triggers but cannot read back without
+                        // the READ role (composite roles in Keycloak are the convenience path).
+                        // The findings path's extra segment needs its own matchers (the M3
+                        // lesson above); HEAD listed explicitly, same reason as everywhere.
+                        .requestMatchers(HttpMethod.POST, "/api/v1/reconciliation-runs")
+                        .hasRole("LEDGER_ADMIN")
+                        .requestMatchers(HttpMethod.GET,
+                                "/api/v1/reconciliation-runs/*",
+                                "/api/v1/reconciliation-runs/*/findings")
+                        .hasRole("LEDGER_READ")
+                        .requestMatchers(HttpMethod.HEAD,
+                                "/api/v1/reconciliation-runs/*",
+                                "/api/v1/reconciliation-runs/*/findings")
+                        .hasRole("LEDGER_READ")
                         // Namespace backstop: within /api/v1 only the (method, path) pairs
                         // granted above exist — new endpoints must add explicit rules, and an
                         // unlisted method (PUT, DELETE, ...) is 403 for everyone.

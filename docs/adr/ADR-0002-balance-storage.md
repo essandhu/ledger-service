@@ -4,6 +4,50 @@
 - Date: 2026-07-22
 - Deciders: project owner + planning session
 
+> **Landed M6 (2026-07-26)** — the reconciliation subsystem this ADR mandates, as decided, with
+> the implementation details recorded here:
+>
+> - **The one-statement check, per page.** The job is a chunk-oriented Spring Batch step over
+>   every `account_balance` row: a keyset scan (`account_id >` resume key, the database's own
+>   uuid order) where each page is ONE `LATERAL`-join statement reading the snapshot pair next
+>   to `(SUM(amount), COUNT(*))` — the READ COMMITTED single-statement consistency argument
+>   above, realized per page. The job takes no locks; ADR-0003's single lock site stays
+>   `BalanceRepository.lockBalances`.
+> - **Findings extend the sketched shape.** `reconciliation_finding` carries
+>   `snapshot_count`/`computed_count` alongside the balances: the watermark comparison is
+>   load-bearing (a count-only divergence with an intact balance must be expressible), so a
+>   finding records both pairs and the balance `delta`, with CHECKs pinning delta honesty and
+>   "a finding exists iff drift exists". One finding per (run, account); write-once grants
+>   (`SELECT, INSERT`), no repair path — flag-and-investigate, structurally.
+> - **Runs record every check the sweep performs.** `reconciliation_run` carries the verdict
+>   (`RUNNING → CLEAN | DRIFT | FAILED`), `triggered_by` (JWT subject or `scheduler`), and —
+>   beyond the sketched `accounts_checked`/`drift_count` — the three run-level integrity
+>   re-checks as counts: the two posting denormalization re-verifications (currency, posted_at)
+>   and the I5 global per-currency zero-sum at rest. A check the job performs but does not
+>   record is a check nobody can audit later; DB CHECKs pin verdict-matches-counts.
+> - **The verdict is decided in the core.** A framework-free application service aggregates the
+>   run's findings and integrity counts and writes the single set-based finish UPDATE; the
+>   Batch listener only wires job events to it and publishes the metrics. FAILED runs keep NULL
+>   result columns (partial counts from an aborted sweep would be a lie) and leave the gauges
+>   at the last completed run's values.
+> - **Every trigger is a fresh run.** The run id (UUIDv7, application-minted) is the
+>   identifying job parameter, so Batch's duplicate-instance machinery never refuses a sweep
+>   and the job is `preventRestart()` — re-triggering is free, a resumed half-old sweep would
+>   attribute one run's findings to two moments in time. The admin endpoint
+>   (`POST /api/v1/reconciliation-runs`, LEDGER_ADMIN) runs the sweep synchronously and
+>   returns the run resource whatever its verdict; runs and findings read back under
+>   LEDGER_READ. The schedule ships disabled (`ledger.reconciliation.schedule.enabled=false`,
+>   no scheduler bean until enabled — the ADR-0004 purge precedent), single-app-instance
+>   assumption restated.
+> - **BATCH_\* metadata is Flyway-owned** (`V6`, the Batch 6 PostgreSQL DDL transcribed
+>   verbatim), because the runtime role cannot create tables; `ledger_app` holds exactly
+>   `SELECT, INSERT, UPDATE` on the six tables and `USAGE` on the three sequences —
+>   Batch never DELETEs its metadata at runtime, and neither do we.
+> - **A consequence made real:** "I4 must hold across every current and future write path" now
+>   includes test fixtures — raw-SQL fixtures that insert postings or bump snapshots must leave
+>   `snapshot = Σ postings` at rest, or the sweep rightly convicts them (two M2/M5-era fixtures
+>   were brought into line at M6).
+
 ## Context and problem statement
 
 Every journal entry changes the balances of the accounts it touches. Two consumers need those
