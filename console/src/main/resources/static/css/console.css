@@ -88,6 +88,29 @@ button {
   color: var(--green);
 }
 
+/* Drift badge (M8-stretch). The slot is empty until the first poll answers and is left
+   untouched when one fails, so it must occupy no space and draw no border of its own —
+   whatever is or isn't inside it is the whole element. */
+.drift-badge-slot {
+  display: inline-flex;
+  align-items: baseline;
+  /* Set apart from the nav: it sits next to the links but is a status, not a destination,
+     and at the topnav's own gap it reads as a fourth nav item. */
+  margin-left: var(--space-2);
+}
+
+.drift-badge {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-1);
+  text-decoration: none;
+}
+
+.drift-badge .drift-count {
+  font-size: 0.75rem;
+  color: var(--ink-soft);
+}
+
 .topbar-session {
   margin-left: auto;
   display: flex;

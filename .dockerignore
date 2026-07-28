@@ -1,11 +1,13 @@
-# The Dockerfile copies exactly the Gradle inputs and src/; everything else is context weight
-# uploaded to the daemon on every `docker compose build`. Notably docs/media carries a local
-# Playwright install once the README screenshots have been regenerated (docs/media/README.md).
+# Both images build from the REPO ROOT as context (the console's settings evaluation needs
+# the root scripts and the version catalog, and the core's needs the console's build script),
+# so one ignore file serves both. Each Dockerfile then COPYs only the paths it wants — layer
+# caching keys on those, not on context size, so what is listed here is purely about what
+# gets uploaded to the daemon on every build.
 .git/
 .gradle/
-build/
+# Every build directory, at any depth: console/build holds the boot jar and the JaCoCo and
+# Playwright reports, which dwarf the sources. A bare `build/` would only match the root one.
+**/build/
+# docs/media carries a local Playwright install once the README screenshots are regenerated
+# (docs/media/README.md).
 docs/
-# The console (M8) never ships in this image — only its build script enters the context,
-# because settings.gradle.kts includes the project and Gradle must evaluate it.
-console/**
-!console/build.gradle.kts

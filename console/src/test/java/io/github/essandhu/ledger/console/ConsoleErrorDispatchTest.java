@@ -9,9 +9,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
-import org.springframework.context.annotation.Import;
-
-import io.github.essandhu.ledger.console.support.TestClientRegistrations;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -25,7 +22,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  * redirect-following client would walk into whatever Keycloak is or isn't running.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@Import(TestClientRegistrations.class)
 @DisplayName("Error dispatch (M8a): permitted-but-missing assets 404 plainly, no Keycloak bounce")
 class ConsoleErrorDispatchTest {
 

@@ -208,6 +208,90 @@ the demo repairs the snapshot, but the DRIFT run and its finding remain — runs
 and findings are write-once, so delta 7 is visible in the console permanently, which is a
 better demonstration of the audit model than a drift left unrepaired would have been.
 
+## M8-stretch landing (2026-07-27) — the console containerized, and two corrections to this ADR
+
+The issuer-topology decision above chose "phase 1: host-run" and recorded the containerized
+recipe as pre-research. Building it corrected that recipe twice, in the project's own favour.
+
+1. **The ID-token issuer check does NOT have to be forgone.** The pre-research assumed a
+   hand-built registration loses it, because the check was believed to compare `iss` against
+   *discovery metadata* — which a registration that never discovered anything cannot have.
+   Read from the artifact rather than from memory (the ADR-0005 discipline, applied to
+   `OidcIdTokenValidator` in Security 7.1): it compares `iss` against
+   `ClientRegistration.ProviderDetails.getIssuerUri()`. That is a field this project sets. The
+   compose stack pins `KC_HOSTNAME` to the browser-facing URL, so the browser-facing issuer
+   *is* the string Keycloak stamps into every token — set it and the check is fully armed.
+   Note the shape of the near-miss: omitting the issuer would not have failed anything. Login
+   would have worked, tests would have been green, and one validation would silently not be
+   happening. `ConsoleOidcConfigTest` pins the field for that reason.
+2. **Discovery was also buying a userinfo call nobody wanted.** `OidcUserService` fetches the
+   userinfo endpoint whenever the registration has one and the request carries the `profile`
+   scope — which discovery always supplied. The console reads nothing from it: roles come off
+   the ID token by decision 6 above, and `preferred_username` rides the same token. A
+   hand-built registration can decline, which discovery gave no way to say. One network leg
+   removed from the login path, and one failure mode with it. This surfaced as a test failure
+   the moment the production registration replaced the test one — the two had disagreed about
+   userinfo since M8a, and the test was right.
+
+**The split, and why the client needs one where the resource server didn't.** The console now
+builds its single `ClientRegistration` by hand (`ConsoleOidcConfig`) from two URLs:
+`browser-issuer-uri` (authorization, `end_session_endpoint`, and the issuer) and
+`network-issuer-uri` (token, JWKS). On the host both are `localhost:8081` and nothing looks
+split at all, which is the point — one code path, no profile fork, no configuration that only
+exists in production. The core's resource server expressed the same idea in standard Boot
+properties (`issuer-uri` plus an in-network `jwk-set-uri`); the OAuth2 *client* has no such
+slot, because setting a provider `issuer-uri` is precisely what triggers the eager
+`ClientRegistrations.fromIssuerLocation()` call at startup. Hence one project-namespaced
+property block rather than half in Boot's namespace and half in ours, where neither file would
+tell the whole story. The price, on record: Keycloak's `/protocol/openid-connect/*` URL layout
+is now hardcoded instead of read from the provider.
+
+**What killing discovery paid for, beyond the container.** The console context no longer
+touches the network at startup, so: Keycloak stopped being a startup dependency (it fails fast
+and loudly for a *wrong* URL, not for an absent one); the console image performs the same CDS
+training run the core image does, which a context that dials a provider could not; and
+`TestClientRegistrations` — a stand-in registration bean that existed only to suppress
+discovery so tests could load a context — was deleted. Every console test now assembles the
+PRODUCTION registration from the production yaml, and `WhoamiPageTest` asserts the logout
+redirect against the running bean's own metadata rather than a constant copied beside it.
+
+**Back-channel logout, the trade-off this ADR left open.** The decision outcome above recorded
+logout as one-way, "deferred to the containerized stretch" because OIDC back-channel logout
+needs a console URL Keycloak can reach and a container cannot dial a developer's host process.
+Containerizing supplied the URL, so the deferral is closed rather than left standing:
+`oidcLogout().backChannel()` plus the realm's `backchannel.logout.url` pointing at
+`http://console:8090/...`. Three notes worth having in writing:
+
+- The endpoint takes **no** `permitAll` and **no** CSRF exemption, and that absence is
+  deliberate rather than an oversight: Security installs `OidcBackChannelLogoutFilter` *before*
+  `CsrfFilter` and the filter answers the request itself, so neither CSRF nor authorization
+  ever runs for it. A `permitAll` rule would imply a check that does not happen.
+- Configuring `oidcLogout` is also what makes `oauth2Login` start recording sessions in the
+  `OidcSessionRegistry`. Without it every logout token would validate correctly and match
+  nothing — the quietest possible failure, which is why `ConsoleLoginCallbackTest` asserts the
+  session is registered after a real login callback, and why the registry is an explicit bean
+  (the precedent `ApiClientConfig` set with the authorized-client manager).
+- It is **topology-dependent, by nature**: `console:8090` resolves only inside the compose
+  network, so a host-run console is not reachable and Keycloak logs a failed notification.
+  Front-channel RP-initiated logout is unaffected. The registry is also in-memory, so a
+  multi-replica console would need a shared one — a logout token reaches exactly one replica.
+
+**The drift badge, and the hazard it exposed.** The badge reports the newest sweep's verdict in
+the topbar, polled by htmx every 15 seconds rather than rendered with the page: the topbar is on
+every page, and an accounts listing should not pay for a reconciliation read or break when one
+fails. It reports *what the last sweep said*, never a live claim about the data — nothing knows
+whether an account has drifted until a sweep looks (ADR-0002), and a badge implying otherwise
+would be the console's one dishonest pixel. A failed poll answers `204`, so the previous verdict
+stays on screen; that silence is scoped to its own controller, because an `@ExceptionHandler`
+that swallows failures is right for ambient chrome and wrong for a page a user asked for.
+
+Putting a poller in the page chrome exposed a pre-existing bug in the M8b load-more, now fixed:
+an htmx request on a dead session followed the login redirect at the XHR level, received
+Keycloak's login page with a `200`, and swapped that HTML into whatever target asked for a
+fragment. The console now answers `HX-Request` with `401` plus `HX-Refresh: true`, so htmx
+reloads at the top level where a login bounce belongs. The *header* carries that meaning rather
+than the status, because the console deliberately mirrors the ledger's own 401 elsewhere.
+
 ## Proof
 
 - `WhoamiPageTest`: unauthenticated requests bounce to Keycloak; the `ops` session renders the

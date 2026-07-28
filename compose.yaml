@@ -84,6 +84,56 @@ services:
       retries: 30
       start_period: 40s
 
+  # --- Read-only console (M8-stretch, ADR-0007) — opt-in profile, like observability below:
+  #   docker compose --profile console up -d --build --wait
+  #   docker compose --profile console down    (plain `down` won't stop this one)
+  # The whole story with zero host processes; before this milestone the console had to run on
+  # the host, because Boot's OAuth2 client discovered the issuer at startup and an in-container
+  # localhost:8081 is the container's own loopback.
+  console:
+    build:
+      # Root context: Gradle evaluates the settings script and the root project before it can
+      # build the subproject.
+      context: .
+      dockerfile: console/Dockerfile
+    profiles: ["console"]
+    environment:
+      # The split that makes containerization possible (ConsoleOidcConfig). The BROWSER is
+      # redirected to Keycloak on the host's published port — which is also the `iss` Keycloak
+      # stamps into the ID token, since KC_HOSTNAME above pins exactly this — while this JVM
+      # dials the token and JWKS endpoints over the compose network, the same hop the app
+      # service already takes for its JWKS.
+      LEDGER_CONSOLE_BROWSER_ISSUER_URI: http://localhost:8081/realms/ledger
+      LEDGER_CONSOLE_NETWORK_ISSUER_URI: http://keycloak:8080/realms/ledger
+      LEDGER_CONSOLE_API_BASE_URL: http://app:8080
+      LEDGER_CONSOLE_CLIENT_SECRET: ledger-console-dev-secret   # dev/demo stack only
+    ports:
+      # Published on the SAME port it listens on: the realm registers
+      # http://localhost:8090/login/oauth2/code/keycloak as an exact string, and the redirect
+      # URI is resolved from the browser's own request.
+      - "8090:8090"
+    depends_on:
+      keycloak:
+        condition: service_healthy
+      app:
+        condition: service_healthy
+    healthcheck:
+      # Same /dev/tcp probe as the app service — this image ships no curl either, and its
+      # /bin/sh is dash, so bash is invoked explicitly. /actuator/health is one of the
+      # console's two anonymous endpoints (ADR-0007).
+      test:
+        - CMD
+        - bash
+        - -c
+        - >-
+          exec 3<>/dev/tcp/127.0.0.1/8090 &&
+          printf 'GET /actuator/health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3 &&
+          grep -q '"status":"UP"' <&3
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
   # --- Observability (M7 stretch, ADR-0006) — opt-in profile so the default stack stays lean:
   #   docker compose --profile observability up -d
   #   docker compose --profile observability down   (plain `down` won't stop these two)

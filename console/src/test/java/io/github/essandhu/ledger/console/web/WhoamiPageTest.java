@@ -6,14 +6,15 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import org.springframework.test.web.servlet.assertj.MvcTestResult;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
+import io.github.essandhu.ledger.console.config.ConsoleOidcConfig;
 import io.github.essandhu.ledger.console.config.ConsoleRealmRoleMapper;
 import io.github.essandhu.ledger.console.support.ConsoleSessions;
 import io.github.essandhu.ledger.console.support.ConsoleWebTest;
-import io.github.essandhu.ledger.console.support.TestClientRegistrations;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
@@ -33,6 +34,9 @@ class WhoamiPageTest {
 
     @Autowired
     MockMvcTester mvc;
+
+    @Autowired
+    ClientRegistrationRepository clientRegistrations;
 
     private static RequestPostProcessor user(String username, String... realmRoles) {
         return ConsoleSessions.user(username, realmRoles);
@@ -116,9 +120,19 @@ class WhoamiPageTest {
                     .exchange();
 
             assertThat(result).hasStatus3xxRedirection();
+            // Asserted against the PRODUCTION registration's own metadata, not a constant
+            // copied beside it: since M8-stretch the console builds end_session_endpoint
+            // itself (no discovery to hand it over), so the value this redirect must match is
+            // the one the running bean carries.
+            String endSession = (String) clientRegistrations
+                    .findByRegistrationId(ConsoleOidcConfig.REGISTRATION_ID)
+                    .getProviderDetails().getConfigurationMetadata().get("end_session_endpoint");
+            assertThat(endSession)
+                    .as("browser-facing: the sign-out redirect leaves the console's network")
+                    .isEqualTo("http://localhost:8081/realms/ledger/protocol/openid-connect/logout");
             String location = result.getResponse().getRedirectedUrl();
             assertThat(location)
-                    .startsWith(TestClientRegistrations.END_SESSION_ENDPOINT)
+                    .startsWith(endSession)
                     .contains("id_token_hint=")
                     // {baseUrl} resolved against the request — MockMvc's base is http://localhost.
                     .contains("post_logout_redirect_uri=http://localhost");

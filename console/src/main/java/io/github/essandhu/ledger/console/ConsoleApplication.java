@@ -9,10 +9,12 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  * The console is the API's first real consumer and is deliberately built as one — the core
  * stays a pure resource server; its security posture does not change at all.
  *
- * <p>Phase 1 runs on the HOST (port 8090, {@code ./gradlew :console:bootRun}): the plain
- * {@code issuer-uri} works for both the browser redirect and the JVM's eager startup
- * discovery, which a containerized console's own loopback would break (ADR-0007 records the
- * explicit-endpoints recipe for the containerized stretch).
+ * <p>Runs on port 8090 either as a compose service
+ * ({@code docker compose --profile console up}, the demo topology) or on the host
+ * ({@code ./gradlew :console:bootRun}, the inner loop) — the same code path, because since
+ * M8-stretch the OIDC provider is described by a browser/in-network URL pair that simply
+ * collapses to one URL on the host ({@code ConsoleOidcConfig}). Nothing here dials the
+ * provider at startup, so Keycloak is not a startup dependency.
  */
 @SpringBootApplication
 public class ConsoleApplication {

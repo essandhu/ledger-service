@@ -5,11 +5,11 @@ import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.context.properties.bind.Binder;
-import org.springframework.boot.security.oauth2.client.autoconfigure.OAuth2ClientProperties;
-import org.springframework.core.env.Environment;
+import org.springframework.security.oauth2.client.registration.ClientRegistration;
+import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
 
+import io.github.essandhu.ledger.console.config.ConsoleOidcConfig;
 import io.github.essandhu.ledger.console.support.ConsoleWebTest;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -27,7 +27,7 @@ class ConsoleApplicationTest {
     MockMvcTester mvc;
 
     @Autowired
-    Environment env;
+    ClientRegistrationRepository clientRegistrations;
 
     @Test
     @DisplayName("health answers anonymously — compose/liveness needs no session")
@@ -80,24 +80,38 @@ class ConsoleApplicationTest {
     }
 
     @Test
-    @DisplayName("the yaml pins its own documented trap: registration `keycloak` with the openid scope")
-    void oauth2_client_properties_pin_the_openid_trap() {
-        // Every console test suppresses Boot's property-driven registration (the
-        // TestClientRegistrations bean), so the production yaml would otherwise go
-        // unproven — bind it directly and pin the values the realm and chain hardcode.
-        OAuth2ClientProperties props = Binder.get(env)
-                .bind("spring.security.oauth2.client", OAuth2ClientProperties.class)
-                .get();
-        OAuth2ClientProperties.Registration keycloak = props.getRegistration().get("keycloak");
+    @DisplayName("the context assembles the PRODUCTION registration from the production yaml")
+    void production_registration_is_the_one_under_test() {
+        // Since M8-stretch there is no stand-in registration bean: the eager discovery that
+        // forced one is gone, so THIS is the object the whole suite exercises. Pinned here in
+        // the one test that owns the production context's shape — the split itself is
+        // ConsoleOidcConfigTest's subject.
+        ClientRegistration keycloak =
+                clientRegistrations.findByRegistrationId(ConsoleOidcConfig.REGISTRATION_ID);
+
         assertThat(keycloak)
                 .as("registration id is hardcoded in the realm's redirectUris")
                 .isNotNull();
-        assertThat(keycloak.getScope())
+        assertThat(keycloak.getClientId()).isEqualTo("ledger-console");
+        assertThat(keycloak.getScopes())
                 .as("without openid, login silently downgrades: no ID token, no chips, local-only logout")
                 .contains("openid");
-        assertThat(keycloak.getClientId()).isEqualTo("ledger-console");
-        assertThat(props.getProvider().get("keycloak").getUserNameAttribute())
-                .as("discovery alone would leave the principal name on `sub`")
-                .isEqualTo("preferred_username");
+        assertThat(keycloak.getProviderDetails().getAuthorizationUri())
+                .as("the yaml's default topology is the host one, so a bare bootRun needs no environment")
+                .isEqualTo("http://localhost:8081/realms/ledger/protocol/openid-connect/auth");
+    }
+
+    @Test
+    @DisplayName("the context loads with NO Keycloak reachable — the eager-discovery constraint is gone")
+    void context_assembles_without_a_provider() {
+        // The whole point of M8-stretch, asserted as a fact rather than left implied by the
+        // suite happening to pass: nothing in the console's startup dials the provider, which
+        // is what makes an in-container `localhost:8081` a non-issue. Nothing is stubbed in
+        // this context; if the registration went back to `issuer-uri`, this class would not
+        // load at all.
+        assertThat(clientRegistrations.findByRegistrationId("keycloak").getProviderDetails()
+                .getConfigurationMetadata())
+                .as("built by hand, not fetched: discovery would have populated far more than this")
+                .containsOnlyKeys("end_session_endpoint");
     }
 }

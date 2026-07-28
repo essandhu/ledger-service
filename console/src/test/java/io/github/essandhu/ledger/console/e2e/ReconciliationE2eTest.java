@@ -8,6 +8,7 @@ import java.net.http.HttpResponse;
 import java.nio.file.Path;
 import java.time.Duration;
 
+import com.jayway.jsonpath.JsonPath;
 import com.microsoft.playwright.Browser;
 import com.microsoft.playwright.BrowserContext;
 import com.microsoft.playwright.BrowserType;
@@ -32,6 +33,11 @@ import static org.assertj.core.api.Assertions.fail;
  * deciding what renders, CSRF on a state-changing POST, and htmx's confirm — none of which the
  * MockMvc suite can prove, because each one is the piece it stubs.
  *
+ * <p>Since M8-stretch it runs against the CONTAINERIZED console, which makes it the one place
+ * the OIDC URL split is proven from both ends at once: a login that completes means the
+ * browser reached Keycloak at {@code localhost:8081} <em>and</em> the console reached it at
+ * {@code keycloak:8080} for the token exchange and the JWKS fetch.
+ *
  * <p>Its target is ADR-0007's demo promise: <em>trigger a sweep from the browser and watch the
  * drift finding appear with delta 7</em>. The drift is seeded out of band first
  * ({@code scripts/e2e-fixture.sh} — superuser SQL, the only way drift can exist per ADR-0002);
@@ -48,6 +54,9 @@ class ReconciliationE2eTest {
 
     private static final String BASE = System.getProperty(
             "ledger.e2e.console-base-url", "http://localhost:8090");
+    /** Browser-facing Keycloak — the same URL the console redirects to and the admin API lives on. */
+    private static final String KEYCLOAK = System.getProperty(
+            "ledger.e2e.keycloak-base-url", "http://localhost:8081");
     private static final Path SCREENSHOTS = Path.of(System.getProperty(
             "ledger.e2e.screenshots", "build/reports/playwright"));
 
@@ -88,14 +97,14 @@ class ReconciliationE2eTest {
                 // bare concatenation applies to the LAST literal only — and since Formatter
                 // ignores surplus arguments, the %s and %d would print verbatim in the one
                 // message whose whole job is to explain the missing precondition.
-                fail(("the console at %s is not UP (%d) — start it with "
-                        + "`./gradlew :console:bootJar && "
-                        + "java -jar console/build/libs/console-*.jar`")
+                fail(("the console at %s is not UP (%d) — check `docker compose "
+                        + "--profile console logs console`")
                         .formatted(BASE, health.statusCode()));
             }
         } catch (IOException | InterruptedException unreachable) {
-            fail(("no console at %s — `docker compose up -d --wait`, then run the console on 8090 "
-                    + "(it needs Keycloak alive first: eager issuer discovery, ADR-0007)")
+            fail(("no console at %s — the console is a compose service (M8-stretch): "
+                    + "`docker compose --profile console up -d --build --wait`. A plain "
+                    + "`up` without the profile starts everything EXCEPT the console.")
                     .formatted(BASE), unreachable);
         }
     }
@@ -152,6 +161,13 @@ class ReconciliationE2eTest {
             assertThat(page.locator(".run-counts dd").nth(1)).not().hasText("0");
             screenshot(page, test);
 
+            // The drift badge (M8-stretch) reports the sweep that just ran, from the page
+            // chrome — polled in by htmx after the page rendered, which is the whole design:
+            // no page pays for a reconciliation read it didn't ask for. Playwright retries the
+            // assertion until the first poll lands, so this needs no sleep.
+            assertThat(page.locator(".drift-badge-slot .status-badge")).hasText("DRIFT");
+            assertThat(page.locator(".drift-badge-slot .drift-count")).not().hasText("0");
+
             // Newest first, proven rather than pattern-matched: the run just created is the id
             // in the address bar, and it must be the row the history opens with.
             String runId = page.url().substring(page.url().lastIndexOf('/') + 1);
@@ -183,7 +199,7 @@ class ReconciliationE2eTest {
     }
 
     @Test
-    @DisplayName("signing out ends the Keycloak session too — RP-initiated logout, one way")
+    @DisplayName("signing out ends the Keycloak session too — RP-initiated logout, console → Keycloak")
     void sign_out_returns_to_keycloak(TestInfo test) {
         try (BrowserContext context = browser.newContext()) {
             Page page = signIn(context, "ops", "ops");
@@ -194,5 +210,103 @@ class ReconciliationE2eTest {
             assertThat(page.locator("#kc-form-login")).isVisible();
             screenshot(page, test);
         }
+    }
+
+    /**
+     * The other direction (M8-stretch): an administrator revokes the session in Keycloak, and
+     * the console session dies with it. Until this milestone that could not work at all —
+     * back-channel logout requires Keycloak to reach a console URL, and a container cannot
+     * dial a process on the developer's host. ADR-0007 recorded the one-way logout as an
+     * accepted trade-off "deferred to the containerized stretch"; containerizing supplied the
+     * URL, so this is the cell that closes it.
+     *
+     * <p>Deliberately driven through Keycloak's ADMIN API rather than by clicking anything:
+     * the whole point is that the console is told about a logout it did not participate in
+     * and cannot observe any other way. Nothing here touches the browser until the very last
+     * step, which is the only honest way to ask "did the session actually die?".
+     */
+    @Test
+    @DisplayName("a Keycloak-side revocation ends the console session — back-channel logout, Keycloak → console")
+    void keycloak_side_revocation_ends_the_console_session(TestInfo test) {
+        try (BrowserContext context = browser.newContext()) {
+            Page page = signIn(context, "ops", "ops");
+            // Control: the session is live and rendering before anything is revoked, so a
+            // failure below cannot be "it was never logged in".
+            assertThat(page.locator("#runs-heading")).hasText("Reconciliation runs");
+
+            revokeKeycloakSessionsFor("ops");
+
+            // Keycloak POSTs the logout token to the console while serving the call above, so
+            // this is normally true on the first navigation — but it is a cross-container hop,
+            // and a bounded retry beats a race that fails once a fortnight in CI. The failure
+            // message names the cause rather than leaving a Playwright timeout to be read.
+            for (int attempt = 0; attempt < 20; attempt++) {
+                page.navigate(BASE + "/reconciliation");
+                if (page.url().contains("/protocol/openid-connect/auth")) {
+                    assertThat(page.locator("#kc-form-login")).isVisible();
+                    screenshot(page, test);
+                    return;
+                }
+                page.waitForTimeout(500);
+            }
+            fail("the console session survived a Keycloak-side revocation — back-channel "
+                    + "logout did not arrive (is the console reachable from Keycloak at the "
+                    + "realm's backchannel.logout.url, i.e. running as a compose service?)");
+        }
+    }
+
+    /**
+     * Ends every SSO session {@code username} has, the way an operator would: Keycloak's admin
+     * REST API. The realm's bootstrap admin is the compose stack's {@code admin/admin}, and
+     * {@code admin-cli} is Keycloak's own built-in public client for exactly this.
+     */
+    private static void revokeKeycloakSessionsFor(String username) {
+        try (HttpClient http = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(5)).build()) {
+            String token = JsonPath.read(post(http,
+                    KEYCLOAK + "/realms/master/protocol/openid-connect/token",
+                    "grant_type=password&client_id=admin-cli&username=admin&password=admin",
+                    null), "$.access_token");
+            // exact=true: a prefix match would find the wrong user the moment the realm gains
+            // one whose name starts with this one's.
+            String users = get(http,
+                    KEYCLOAK + "/admin/realms/ledger/users?exact=true&username=" + username,
+                    token);
+            String userId = JsonPath.read(users, "$[0].id");
+            post(http, KEYCLOAK + "/admin/realms/ledger/users/" + userId + "/logout", "", token);
+        } catch (IOException | InterruptedException unreachable) {
+            fail("could not reach Keycloak's admin API at " + KEYCLOAK, unreachable);
+        }
+    }
+
+    private static String post(HttpClient http, String uri, String form, String bearer)
+            throws IOException, InterruptedException {
+        HttpRequest.Builder request = HttpRequest.newBuilder(URI.create(uri))
+                .timeout(Duration.ofSeconds(10))
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .POST(HttpRequest.BodyPublishers.ofString(form));
+        if (bearer != null) {
+            request.header("Authorization", "Bearer " + bearer);
+        }
+        return send(http, request.build());
+    }
+
+    private static String get(HttpClient http, String uri, String bearer)
+            throws IOException, InterruptedException {
+        return send(http, HttpRequest.newBuilder(URI.create(uri))
+                .timeout(Duration.ofSeconds(10))
+                .header("Authorization", "Bearer " + bearer)
+                .GET().build());
+    }
+
+    private static String send(HttpClient http, HttpRequest request)
+            throws IOException, InterruptedException {
+        HttpResponse<String> response =
+                http.send(request, HttpResponse.BodyHandlers.ofString());
+        if (response.statusCode() >= 300) {
+            fail("Keycloak admin API %s answered %d: %s"
+                    .formatted(request.uri(), response.statusCode(), response.body()));
+        }
+        return response.body();
     }
 }
