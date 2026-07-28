@@ -23,6 +23,14 @@
         <a th:href="@{/whoami}" href="whoami.html"
            th:classappend="${active == 'whoami'} ? 'active'">Whoami</a>
     </nav>
+    <!-- Drift badge (M8-stretch): the last sweep's verdict, polled in rather than rendered
+         with the page — the topbar is on EVERY page, and a reconciliation read has no
+         business on the critical path of an account listing. Empty until the first poll
+         lands, and left alone (204) when one fails, so a blip never blanks it.
+         aria-live: a verdict that changes under the reader deserves announcing. -->
+    <span class="drift-badge-slot" role="status" aria-live="polite"
+          th:attr="hx-get=@{/reconciliation/drift-badge}"
+          hx-trigger="load, every 15s" hx-swap="innerHTML"></span>
     <div class="topbar-session">
         <span class="whoami-name" th:text="${#authentication?.name}">ops</span>
         <!-- POST, not a link: logout is state-changing and CSRF-protected; Thymeleaf adds
@@ -32,6 +40,22 @@
         </form>
     </div>
 </header>
+
+<!-- Wrapped in th:block rather than putting th:fragment on the anchor itself: a th:fragment
+     element whose own th:if is false is a shape worth not relying on. Nothing rendered at all
+     is the correct empty state here — a stack with no sweeps yet has nothing to report, and
+     saying "no sweeps" in the page chrome of every page would be noise. -->
+<th:block th:fragment="driftBadge">
+    <a th:if="${badge}" class="drift-badge"
+       th:href="@{/reconciliation/runs/{id}(id=${badge.runId})}"
+       th:title="|Last reconciliation sweep, started ${badge.startedAt}|">
+        <span th:class="|status-badge status-${badge.statusCss}|"
+              th:text="${badge.status}">CLEAN</span>
+        <!-- Absent unless a finished sweep actually found drift: see BadgeView. -->
+        <span th:if="${badge.driftCount}" class="drift-count mono"
+              th:text="${badge.driftCount}">1</span>
+    </a>
+</th:block>
 
 <th:block th:fragment="scripts">
     <!-- htmx 2.0.10, vendored from https://cdn.jsdelivr.net/npm/htmx.org@2.0.10/dist/htmx.min.js;

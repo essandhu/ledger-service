@@ -23,7 +23,6 @@ import org.springframework.test.web.servlet.assertj.MockMvcTester;
 
 import io.github.essandhu.ledger.console.support.ConsoleSessions;
 import io.github.essandhu.ledger.console.support.ConsoleWebTest;
-import io.github.essandhu.ledger.console.support.TestClientRegistrations;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.startsWith;
@@ -92,7 +91,7 @@ class LedgerApiRelayTest {
         MockHttpServletRequest save = new MockHttpServletRequest();
         save.setSession(session);
         authorizedClients.saveAuthorizedClient(
-                new OAuth2AuthorizedClient(TestClientRegistrations.keycloak(), "ops",
+                new OAuth2AuthorizedClient(ConsoleSessions.KEYCLOAK, "ops",
                         new OAuth2AccessToken(OAuth2AccessToken.TokenType.BEARER, "stale-token",
                                 Instant.now(), Instant.now().plusSeconds(300))),
                 ops, save, new MockHttpServletResponse());

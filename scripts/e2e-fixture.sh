@@ -9,7 +9,8 @@
 # Idempotent by construction: every run creates fresh accounts under new ids and corrupts only
 # its own, so re-running adds another drifted account rather than failing or double-counting.
 #
-# Preconditions: the compose stack is up (`docker compose up -d --wait`). Requirements: Docker
+# Preconditions: the compose stack is up, console included since M8-stretch
+# (`docker compose --profile console up -d --build --wait`). Requirements: Docker
 # (compose v2), curl and jq. Bash-portable, same posture as scripts/demo.sh: no GNU-only
 # constructs, and every step asserts — a fixture that half-succeeded must fail loudly rather
 # than hand the e2e lane a state it will misread.
@@ -94,4 +95,5 @@ expect 200 "run history readable (the M8c listing endpoint)"
 ok "fixture ready — drift seeded, unswept"
 
 printf '\n  %sSeeded:%s source %s, target %s, delta +7\n' "$bold" "$reset" "$SRC" "$TGT"
-printf '  Now start the console on 8090 and run: ./gradlew :console:e2eTest\n'
+printf '  Now run: ./gradlew :console:e2eTest  (the console is a compose service — bring the\n'
+printf '  stack up with `docker compose --profile console up -d --build --wait`)\n'

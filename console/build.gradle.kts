@@ -65,11 +65,11 @@ tasks.test {
 // M8c: the browser lane (ADR-0007). Deliberately NOT wired into `check` — the ONE place this
 // diverges from the root project's concurrencyTest precedent. concurrencyTest can join `check`
 // because Testcontainers gives it its own infrastructure; this lane needs an externally started
-// compose stack PLUS a host process on 8090, so wiring it in would break `./gradlew build` and
-// the required "Console build" job. CI runs it as its own job.
+// compose stack (console included since M8-stretch), so wiring it in would break
+// `./gradlew build` and the required "Console build" job. CI runs it as its own job.
 tasks.register<Test>("e2eTest") {
-    description = "Runs the M8c console e2e suite in a real browser (tag: e2e). " +
-        "Needs the compose stack up and the console running on 8090."
+    description = "Runs the console e2e suite in a real browser (tag: e2e). " +
+        "Needs `docker compose --profile console up -d --build --wait` first."
     group = "verification"
     useJUnitPlatform {
         includeTags("e2e")
@@ -81,7 +81,8 @@ tasks.register<Test>("e2eTest") {
     // Deliberately NO credential knobs: each cell is ABOUT its user's role (ops has the
     // trigger, viewer does not), so a configurable username would make the assertions
     // meaningless rather than flexible.
-    listOf("ledger.e2e.console-base-url", "ledger.e2e.headed").forEach { key ->
+    listOf("ledger.e2e.console-base-url", "ledger.e2e.keycloak-base-url",
+        "ledger.e2e.headed").forEach { key ->
         providers.systemProperty(key).orNull?.let { value -> systemProperty(key, value) }
     }
     // Gradle-owned absolute path: a working-directory-relative one would land wherever the

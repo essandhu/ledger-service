@@ -268,9 +268,22 @@ real consumer ([ADR-0007](docs/adr/ADR-0007-read-only-console.md) records why no
 an embedded UI, and the six sub-decisions underneath).
 
 ```sh
-docker compose up -d --build --wait   # the console needs Keycloak alive at STARTUP
-./gradlew :console:bootRun            # then http://localhost:8090 — sign in as ops/ops
+docker compose --profile console up -d --build --wait   # then http://localhost:8090, sign in as ops/ops
 ```
+
+The console is a compose service under an opt-in profile, so the default stack stays lean and
+the full demo needs **zero host processes**. Getting there was the interesting part: Spring's
+OAuth2 *client* resolves a provider's endpoints by calling its discovery document at startup,
+so an in-container `localhost:8081` is the container's own loopback and the app dies on boot.
+The fix is to stop discovering and describe the provider as what it actually is — one Keycloak
+with two addresses. The browser is sent to `localhost:8081` (which is also the `iss` its tokens
+carry); the console reaches the token and JWKS endpoints at `keycloak:8080`. On a host run both
+values are the same URL and nothing looks split, which is why `./gradlew :console:bootRun` is
+still the inner loop and still works — one code path, no profile fork. Removing discovery also
+removed Keycloak as a *startup* dependency, let the console image do the same CDS training run
+the core image does, and deleted a test seam that only existed to work around it
+([ADR-0007](docs/adr/ADR-0007-read-only-console.md) records both places where building this
+corrected its own pre-research).
 
 Server-rendered Thymeleaf with htmx as a vendored static file — no CORS surface on the core, no
 second toolchain, no API-versioning pressure invented by our own frontend. The pages are a
@@ -282,6 +295,7 @@ window onto the invariants rather than a CRUD skin:
 | Entry inspector | the legs of an entry summing to a rendered **zero**, per currency — I1, on screen |
 | Reconciliation → run history → findings | snapshot vs computed vs delta — **I15**, on screen. Newest run first; each finding links back to the drifted account |
 | Whoami | the no-hierarchy role model as chips: every `LEDGER_*` grant the API checks, and a dashed `CONSOLE_*` composite that merely expands to them |
+| Topbar badge | the **last sweep's verdict**, everywhere you are — polled in, never on a page's critical path, and honest about being a verdict rather than a live claim: nothing knows an account has drifted until a sweep looks |
 
 Two demo users, both sides of the role matrix: `ops`/`ops` (composite `CONSOLE_OPS` →
 `LEDGER_READ` + `LEDGER_ADMIN` + `LEDGER_METRICS`) and `viewer`/`viewer` (`LEDGER_READ` only).
@@ -293,9 +307,16 @@ console-owned (JPY 0, EUR 2, BHD 3 — closing the
 [ADR-0001](docs/adr/ADR-0001-money-representation.md) loop), UTC instants render browser-local,
 and every API failure surfaces its RFC 9457 problem body rather than a generic apology.
 
+Sign-out works in **both directions**. Signing out of the console ends the Keycloak SSO session
+(RP-initiated logout); an administrator revoking that session in Keycloak ends the console
+session too (OIDC back-channel logout — Keycloak posts a signed logout token to the console,
+which is only possible now that it has a URL Keycloak can reach). A browser cell proves the
+second one by driving Keycloak's admin API and then asking the browser whether it is still
+signed in.
+
 Existing stacks need the realm refresh noted above (`docker compose down -v`) before browser
-login works. `scripts/demo.sh --console` prints the URL and credentials after the walkthrough —
-and the drift finding it points you at is still there after the demo repairs the snapshot,
+login works. `scripts/demo.sh --console` runs the whole walkthrough with the console already
+up — and the drift finding it points you at is still there after the demo repairs the snapshot,
 because findings are write-once and the run history is append-only.
 
 ## Testing & CI
@@ -306,7 +327,7 @@ because findings are write-once and the run history is append-only.
 | stress (`./gradlew concurrencyTest`) | the I6/I7/I8/I17 hammers — never cached, re-samples interleavings every run | CI "Concurrency proof" |
 | smoke | compose up + scripted probes over the real Keycloak issuer, including the drift demo | CI "docker-compose smoke test" |
 | console (`./gradlew :console:build`) | the read-only console's suite — login chain, role rendering, money/time/error presentation, the reconciliation surfaces, its own coverage gate | CI "Console build" |
-| console e2e (`./gradlew :console:e2eTest`) | a real browser (Playwright, chromium) through the real Keycloak login against the compose stack + the host-run console — deliberately outside `check` | CI "Console E2E" |
+| console e2e (`./gradlew :console:e2eTest`) | a real browser (Playwright, chromium) through the real Keycloak login against the compose stack, console included (`--profile console`) — deliberately outside `check` | CI "Console E2E" |
 
 The core's JaCoCo gate is `check`-fatal at **0.90 line coverage** overall, with a second exact
 rule: the domain packages hold **100%** — every uncovered domain line is treated as either a

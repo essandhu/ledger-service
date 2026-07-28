@@ -74,7 +74,10 @@
       "redirectUris": ["http://localhost:8090/login/oauth2/code/keycloak"],
       "webOrigins": ["http://localhost:8090"],
       "attributes": {
-        "post.logout.redirect.uris": "http://localhost:8090"
+        "post.logout.redirect.uris": "http://localhost:8090",
+        "backchannel.logout.url": "http://console:8090/logout/connect/back-channel/keycloak",
+        "backchannel.logout.session.required": "true",
+        "backchannel.logout.revoke.offline.tokens": "false"
       },
       "protocolMappers": [
         {

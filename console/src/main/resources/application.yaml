@@ -1,42 +1,42 @@
-# Console configuration (ADR-0007). Host-run phase 1: the console listens on 8090 and talks
-# to the compose stack's Keycloak on localhost:8081 — one URL that works for both the
-# browser's redirects and the JVM's eager issuer discovery at startup (which is also why the
-# stack must be up BEFORE `:console:bootRun`; a wrong/down issuer fails fast at boot).
+# Console configuration (ADR-0007). Every URL below is overridable by environment variable
+# because the console runs in two topologies from the SAME image and the SAME code path:
+# on the host (`./gradlew :console:bootRun`, everything on localhost) and as a compose
+# service (`docker compose --profile console up`, where Keycloak and the ledger answer to
+# their in-network names). The defaults are the host ones, so a bare run needs no environment
+# at all.
 server:
   port: 8090
 
 spring:
   application:
     name: ledger-console
-  security:
-    oauth2:
-      client:
-        registration:
-          keycloak:
-            client-id: ledger-console
-            client-secret: ${LEDGER_CONSOLE_CLIENT_SECRET:ledger-console-dev-secret}
-            # openid is REQUIRED and NOT defaulted: without it login silently downgrades to
-            # plain OAuth2 (no ID token), the whoami claims vanish, and RP-initiated logout
-            # degrades to local-only. profile adds preferred_username and the display name.
-            scope: openid, profile
-        provider:
-          keycloak:
-            issuer-uri: ${LEDGER_CONSOLE_ISSUER_URI:http://localhost:8081/realms/ledger}
-            # Discovery alone would leave the principal name on OIDC's default `sub` (a
-            # UUID); properties overlay discovery, so Authentication.getName() is the
-            # human-readable username in production exactly as in the test registration.
-            user-name-attribute: preferred_username
+  # Deliberately NO spring.security.oauth2.client.* here. The console builds its one
+  # registration by hand (ConsoleOidcConfig) because Boot's property model has no slot for a
+  # provider whose URLs differ by caller: setting a provider `issuer-uri` triggers eager OIDC
+  # discovery at startup, and an in-container `localhost:8081` is the container's own
+  # loopback. Splitting the inputs across two namespaces would leave neither file telling the
+  # whole story, so the registration has exactly one source — the block below.
+
+ledger:
+  console:
+    oidc:
+      # Where the BROWSER is sent, and the `iss` the ID token carries (compose pins
+      # KC_HOSTNAME to this exact value). Never an in-network name: the browser is outside.
+      browser-issuer-uri: ${LEDGER_CONSOLE_BROWSER_ISSUER_URI:http://localhost:8081/realms/ledger}
+      # Where THIS JVM dials Keycloak — token exchange, JWKS, userinfo. Identical to the
+      # browser URL on the host; http://keycloak:8080/realms/ledger inside compose.
+      network-issuer-uri: ${LEDGER_CONSOLE_NETWORK_ISSUER_URI:http://localhost:8081/realms/ledger}
+      client-id: ledger-console
+      client-secret: ${LEDGER_CONSOLE_CLIENT_SECRET:ledger-console-dev-secret}
+  api:
+    # The core service. Every call carries the user's own token (the relay in
+    # ApiClientConfig) — the console holds no API credential of its own.
+    base-url: ${LEDGER_CONSOLE_API_BASE_URL:http://localhost:8080}
 
 management:
   endpoints:
     web:
       exposure:
         # Health only — the console carries no metrics story of its own (the ledger's
-        # observability surface is the core's, ADR-0006).
+        # observability surface is the core's, ADR-0006). Also the compose healthcheck's probe.
         include: health
-
-ledger:
-  api:
-    # The core service, as seen from the host-run console. Every call carries the user's own
-    # token (the relay in ApiClientConfig) — the console holds no API credential of its own.
-    base-url: ${LEDGER_CONSOLE_API_BASE_URL:http://localhost:8080}

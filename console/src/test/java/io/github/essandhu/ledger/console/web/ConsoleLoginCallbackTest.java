@@ -18,6 +18,7 @@ import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.security.oauth2.client.endpoint.OAuth2AccessTokenResponseClient;
 import org.springframework.security.oauth2.client.endpoint.OAuth2AuthorizationCodeGrantRequest;
+import org.springframework.security.oauth2.client.oidc.session.OidcSessionRegistry;
 import org.springframework.security.oauth2.client.registration.ClientRegistration;
 import org.springframework.security.oauth2.client.web.HttpSessionOAuth2AuthorizationRequestRepository;
 import org.springframework.security.oauth2.core.OAuth2AccessToken;
@@ -28,8 +29,6 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoderFactory;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import org.springframework.test.web.servlet.assertj.MvcTestResult;
-
-import io.github.essandhu.ledger.console.support.TestClientRegistrations;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -48,12 +47,15 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 @SpringBootTest
 @AutoConfigureMockMvc
-@Import({TestClientRegistrations.class, ConsoleLoginCallbackTest.LoginStubs.class})
+@Import(ConsoleLoginCallbackTest.LoginStubs.class)
 @DisplayName("Login callback (M8a): the production chain mints ROLE_* authorities from the ID token")
 class ConsoleLoginCallbackTest {
 
     @Autowired
     MockMvcTester mvc;
+
+    @Autowired
+    OidcSessionRegistry sessionRegistry;
 
     @TestConfiguration(proxyBeanMethods = false)
     static class LoginStubs {
@@ -122,5 +124,20 @@ class ConsoleLoginCallbackTest {
                 .containsSubsequence(">ops<",
                         ">CONSOLE_OPS<", ">LEDGER_ADMIN<", ">LEDGER_METRICS<", ">LEDGER_READ<")
                 .doesNotContain("No ledger roles", "ROLE_");
+
+        // ...and the login recorded that session for back-channel logout (M8-stretch). This
+        // is the half of back-channel logout that is otherwise invisible until a real logout
+        // token arrives and silently matches nothing: the endpoint would still answer
+        // correctly, the token would still validate, and no session would ever end. It works
+        // only because the chain configures oidcLogout — that is what makes oauth2Login add
+        // the registry's session-authentication strategy at all. oidcLogin()-minted sessions
+        // in the rest of the suite bypass this leg by design (no authentication filter runs),
+        // which is why the assertion lives in the one test that drives the real callback.
+        //
+        // Reading is removing on this interface, so it comes last: nothing after it would see
+        // the entry.
+        assertThat(sessionRegistry.removeSessionInformation(session.getId()))
+                .as("the console's session, correlated to the Keycloak session behind it")
+                .isNotNull();
     }
 }

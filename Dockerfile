@@ -6,6 +6,8 @@ COPY settings.gradle.kts build.gradle.kts gradle.properties ./
 COPY gradle ./gradle
 # Settings evaluation needs every included project's build script to exist (M8 made the build
 # multi-project) — but only the ROOT bootJar is built here, hence the leading colon below.
+# The console's SOURCES are deliberately not copied: they never ship in this image, and
+# leaving them out of the layer keeps a console change from invalidating this build.
 COPY console/build.gradle.kts ./console/build.gradle.kts
 COPY src ./src
 RUN gradle :bootJar --no-daemon \

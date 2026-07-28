@@ -7,7 +7,7 @@
 #
 #   scripts/demo.sh                  # fresh stack (down -v first), leaves it running
 #   scripts/demo.sh --observability  # same, plus Prometheus + Grafana (ADR-0006)
-#   scripts/demo.sh --console        # same, plus how to open the read-only console (ADR-0007)
+#   scripts/demo.sh --console        # same, plus the read-only console on :8090 (ADR-0007)
 #
 # Requirements: Docker (compose v2) and jq. Bash-portable: no GNU-only constructs — status
 # codes and bodies are captured separately instead of `head -n -1` (which breaks on macOS).
@@ -69,11 +69,14 @@ token_for() { # CLIENT_ID CLIENT_SECRET
 }
 
 step "Fresh stack (docker compose down -v && up --build --wait; first build takes a few minutes)"
-# Teardown names the observability profile unconditionally: a previous --observability run's
-# containers would otherwise survive a plain `down` and hold the network.
-docker compose --profile observability down -v --remove-orphans >/dev/null 2>&1 || true
+# Teardown names every profile unconditionally: a previous --observability or --console run's
+# containers would otherwise survive a plain `down` and hold the network (and port 8090).
+docker compose --profile observability --profile console down -v --remove-orphans >/dev/null 2>&1 || true
 profile_args=()
-$OBSERVABILITY && profile_args=(--profile observability)
+$OBSERVABILITY && profile_args+=(--profile observability)
+# M8-stretch: the console is a compose service now, so --console adds a profile rather than
+# printing a Gradle command to run afterwards. Its image is built by the same `up --build`.
+$CONSOLE && profile_args+=(--profile console)
 # ${arr[@]+...} guard: macOS ships bash 3.2, where "${arr[@]}" on an empty array trips set -u.
 docker compose ${profile_args[@]+"${profile_args[@]}"} up -d --build --wait --wait-timeout 300
 ok "PostgreSQL + Keycloak (realm imported) + app are healthy"
@@ -241,18 +244,16 @@ if $OBSERVABILITY; then
   echo "    Grafana      http://localhost:3000  (anonymous viewer; dashboard: Ledger Service)"
 fi
 if $CONSOLE; then
-  # The console is a HOST process in this phase, not a compose service (ADR-0007: Boot's OAuth2
-  # client does eager issuer discovery at startup, so an in-container localhost:8081 would be
-  # the container's own loopback). The stack above is already up, which is the precondition.
-  echo "  Read-only console (ADR-0007) — start it, then open it:"
-  echo "    Start        ./gradlew :console:bootRun"
-  echo "    Console      http://localhost:8090"
+  # Already running — the console is a compose service since M8-stretch (ADR-0007), so there is
+  # nothing left to start by hand. It came up with the stack above and is healthy.
+  echo "    Console      http://localhost:8090  (running — no host process)"
   echo "    Sign in as   ops/ops        (CONSOLE_OPS → READ + ADMIN + METRICS)"
   echo "                 viewer/viewer  (READ only — no trigger button)"
+  echo "  The topbar badge reports the sweep that just ran: CLEAN, after the repair above."
   echo "  Then: Reconciliation → open the DRIFT run. The finding is still there, with delta 7:"
   echo "  the repair above fixed the snapshot, but findings are write-once audit artifacts and"
   echo "  the run history is append-only — a sweep's verdict is never edited away."
 fi
 # Profile-aware unconditionally: harmless on a plain run, and it cleans up leftovers from
-# any earlier --observability run.
-echo "  Tear down:   docker compose --profile observability down -v"
+# any earlier --observability or --console run.
+echo "  Tear down:   docker compose --profile observability --profile console down -v"
