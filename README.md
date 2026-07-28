@@ -297,6 +297,14 @@ window onto the invariants rather than a CRUD skin:
 | Whoami | the no-hierarchy role model as chips: every `LEDGER_*` grant the API checks, and a dashed `CONSOLE_*` composite that merely expands to them |
 | Topbar badge | the **last sweep's verdict**, everywhere you are — polled in, never on a page's critical path, and honest about being a verdict rather than a live claim: nothing knows an account has drifted until a sweep looks |
 
+![The read-only console signed in as ops, showing a reconciliation run that convicted a corrupted snapshot: a DRIFT verdict beside its five result counts, the same verdict echoed by the topbar badge, and one findings row putting the balance the ledger had stored next to the total its postings actually sum to, differing by a delta of 4200 raw minor units](docs/media/console.png)
+
+<sub>A live page, not a mockup: [`docs/media/capture.mjs`](docs/media/capture.mjs) induces the same
+out-of-band corruption `scripts/demo.sh` does — a superuser `UPDATE` the application's own role is
+not granted — signs in through the real Keycloak login form, shoots the run that caught it, then
+repairs the snapshot by recomputation and re-verifies `CLEAN`. The delta on screen is the exact
+corruption that was induced.</sub>
+
 Two demo users, both sides of the role matrix: `ops`/`ops` (composite `CONSOLE_OPS` →
 `LEDGER_READ` + `LEDGER_ADMIN` + `LEDGER_METRICS`) and `viewer`/`viewer` (`LEDGER_READ` only).
 The one permitted action is triggering a reconciliation sweep — additive-safe audit history, not

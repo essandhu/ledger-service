@@ -1,9 +1,9 @@
-// Screenshot capture for the README's two web surfaces (docs/media/README.md has the runbook).
+// Screenshot capture for the README's three web surfaces (docs/media/README.md has the runbook).
 //
 //   cd docs/media && npm install && npx playwright install chromium
 //   node capture.mjs                 # against a stack already up on localhost
 //
-// Both shots come from a live stack:
+// Every shot comes from a live stack:
 //
 //   openapi.png   Swagger UI rendering /v3/api-docs. The whole API is behind a bearer token
 //                 (only /actuator/health is anonymous), so the browser context carries a real
@@ -15,6 +15,12 @@
 //                 application's own role is not granted — waits for Prometheus to scrape it,
 //                 shoots, then repairs the snapshot by recomputation and re-runs the sweep. The
 //                 stack is left CLEAN; nothing here is mocked or hand-drawn.
+//
+//   console.png   The read-only console showing that same drifted run: snapshot vs computed vs
+//                 delta, which is I15 on a screen. Shot INSIDE the drift window the Grafana step
+//                 already opened — one induced corruption, two images of the same true event —
+//                 and reached through the real Keycloak login form, because the console has no
+//                 anonymous surface but its health endpoint.
 import { execFileSync } from 'node:child_process';
 import { chromium } from 'playwright';
 import { fileURLToPath } from 'node:url';
@@ -24,6 +30,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const BASE = process.env.BASE ?? 'http://localhost:8080';
 const KC = process.env.KC ?? 'http://localhost:8081';
 const GRAFANA = process.env.GRAFANA ?? 'http://localhost:3000';
+const CONSOLE = process.env.CONSOLE_URL ?? 'http://localhost:8090';
 const SCRAPE_SETTLE_MS = 35_000; // prometheus.yml scrape_interval is 15s — two scrapes plus slack
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -89,7 +96,13 @@ try {
           WHERE account_id = (SELECT account_id FROM account_balance
                               WHERE balance <> 0 ORDER BY account_id LIMIT 1)`);
   const drifted = await sweep(admin);
-  if (drifted.status !== 'DRIFT') throw new Error(`expected DRIFT, got ${drifted.status}`);
+  if (drifted.status !== 'DRIFT') {
+    // Almost always means the ledger is empty: the UPDATE above matches on a NON-ZERO balance,
+    // so with no postings it corrupts nothing and the sweep is honestly CLEAN. Name the fix
+    // rather than leaving a bare status to interpret.
+    throw new Error(`expected DRIFT, got ${drifted.status} — has anything been posted? `
+      + 'Run docs/media/tour.sh (or scripts/demo.sh) against this stack first.');
+  }
   console.log(`drift induced and detected: ${drifted.driftCount} account(s)`);
 
   console.log(`waiting ${SCRAPE_SETTLE_MS / 1000}s for Prometheus to scrape the gauges...`);
@@ -105,6 +118,37 @@ try {
   await dash.screenshot({ path: join(HERE, 'grafana.png') });
   console.log('grafana.png');
   await graf.close();
+
+  // --- console.png -----------------------------------------------------------------------
+  // Still inside the drift window: the run Grafana just charted is the run this page explains.
+  // The console has no anonymous surface beyond health, so this is a REAL authorization-code
+  // login against the compose Keycloak — same stock-theme selectors the e2e lane drives.
+  const ui = await browser.newContext({ viewport: { width: 1280, height: 900 }, deviceScaleFactor: 2 });
+  const consolePage = await ui.newPage();
+  await consolePage.goto(`${CONSOLE}/reconciliation/runs/${drifted.id}`);
+  await consolePage.waitForURL('**/realms/ledger/protocol/openid-connect/auth**', { timeout: 30_000 });
+  // ops, not viewer: the topbar of a viewer session is the same, but ops is the role the README
+  // tells a reader to sign in as, and a screenshot should show what they will see.
+  await consolePage.fill('#username', 'ops');
+  await consolePage.fill('#password', 'ops');
+  await consolePage.click('#kc-login');
+  // Trailing glob, not an exact URL: Spring Security replays the saved request with a
+  // `?continue` marker appended, so an exact match waits forever on a page that already loaded.
+  await consolePage.waitForURL(`${CONSOLE}/reconciliation/runs/${drifted.id}**`, { timeout: 30_000 });
+  // The topbar badge is polled in after the page renders (by design — no page pays for a
+  // reconciliation read it did not ask for), so wait for it or the shot catches an empty slot.
+  await consolePage.waitForSelector('.drift-badge-slot .status-badge', { timeout: 30_000 });
+  await consolePage.waitForSelector('td.delta', { timeout: 15_000 });
+  await sleep(400); // let app.js localize the timestamps; UTC ISO text otherwise flashes
+  // Cut just below the findings panel instead of at the viewport edge, as the openapi shot does.
+  const lastPanel = consolePage.locator('section.panel').last();
+  const panelBox = await lastPanel.boundingBox();
+  await consolePage.screenshot({
+    path: join(HERE, 'console.png'),
+    clip: { x: 0, y: 0, width: 1280, height: Math.ceil(panelBox.y + panelBox.height + 24) },
+  });
+  console.log('console.png');
+  await ui.close();
 
   // --- leave the stack as we found it ------------------------------------------------------
   psql(RECOMPUTE_ALL);
